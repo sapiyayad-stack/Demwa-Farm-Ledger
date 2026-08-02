@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demwa Farm Ledger — Farm Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDE6D6;
+    --bg-alt:#F7F3EA;
+    --panel:#FBF8F1;
+    --ink:#241C15;
+    --ink-soft:#6B5F4E;
+    --line:#DCD0B6;
+    --onion:#8C2F39;
+    --onion-light:#C7566A;
+    --onion-wash:#F3E1E0;
+    --water:#24677D;
+    --water-light:#6FA8BE;
+    --water-wash:#DCEAEE;
+    --growth:#4F6B3A;
+    --growth-wash:#E3E9D8;
+    --gold:#C08A2E;
+    --gold-wash:#F3E6C9;
+    --danger:#A23B2E;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Work Sans', sans-serif;
+    font-size:14px;
+    line-height:1.5;
+  }
+  h1,h2,h3,.display{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  .app{display:flex; min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{
+    width:220px; flex-shrink:0;
+    background:var(--ink);
+    color:var(--bg-alt);
+    padding:24px 16px;
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh;
+  }
+  .brand{margin-bottom:32px;}
+  .brand .mark{
+    font-family:'Fraunces', serif; font-size:22px; font-weight:700; color:var(--gold);
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand .sub{font-size:11px; color:#B8AC96; letter-spacing:.04em; text-transform:uppercase; margin-top:4px;}
+  .nav{display:flex; flex-direction:column; gap:2px;}
+  .nav button{
+    all:unset; cursor:pointer; padding:10px 12px; border-radius:8px;
+    font-size:13.5px; color:#D9CFBC; display:flex; align-items:center; gap:10px;
+    transition:background .15s;
+  }
+  .nav button:hover{background:#332920;}
+  .nav button.active{background:var(--onion); color:#fff;}
+  .nav .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;flex-shrink:0;}
+  .sidebar-foot{margin-top:auto; font-size:11px; color:#8A7C64; padding-top:16px; border-top:1px solid #3A2F24;}
+
+  /* Main */
+  .main{flex:1; padding:32px 40px; max-width:1180px;}
+  .topline{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px;}
+  .topline h1{font-size:26px; margin:0;}
+  .topline p{margin:4px 0 0; color:var(--ink-soft); font-size:13px;}
+
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px;}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .card .label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft);}
+  .card .value{font-family:'Fraunces',serif; font-size:24px; font-weight:600; margin-top:6px;}
+  .card.onion{border-left:3px solid var(--onion);}
+  .card.water{border-left:3px solid var(--water);}
+  .card.growth{border-left:3px solid var(--growth);}
+  .card.gold{border-left:3px solid var(--gold);}
+
+  section{margin-bottom:36px;}
+  .section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .section-head h2{font-size:18px; margin:0;}
+  .btn{
+    all:unset; cursor:pointer; background:var(--onion); color:#fff; padding:8px 14px;
+    border-radius:7px; font-size:13px; font-weight:500;
+  }
+  .btn:hover{background:#752530;}
+  .btn.secondary{background:transparent; color:var(--ink); border:1px solid var(--line);}
+  .btn.secondary:hover{background:var(--bg-alt);}
+  .btn.water{background:var(--water);}
+  .btn.water:hover{background:#1b4f60;}
+  .btn.small{padding:5px 10px; font-size:12px;}
+  .btn.ghost{background:transparent; color:var(--onion); padding:4px 6px;}
+
+  .empty{
+    border:1px dashed var(--line); border-radius:var(--radius); padding:28px; text-align:center;
+    color:var(--ink-soft); background:var(--bg-alt);
+  }
+
+  /* Batch card */
+  .batch{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    margin-bottom:16px; overflow:hidden;
+  }
+  .batch-head{padding:16px 18px; display:flex; justify-content:space-between; align-items:flex-start; cursor:pointer;}
+  .batch-title{font-family:'Fraunces',serif; font-size:17px; font-weight:600;}
+  .batch-meta{font-size:12px; color:var(--ink-soft); margin-top:3px;}
+  .badge{
+    display:inline-block; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+    padding:3px 8px; border-radius:20px; font-weight:600;
+  }
+  .badge.active{background:var(--growth-wash); color:var(--growth);}
+  .badge.harvested{background:var(--gold-wash); color:var(--gold);}
+  .batch-stats{text-align:right;}
+  .batch-stats .p{font-family:'IBM Plex Mono'; font-size:15px; font-weight:500;}
+  .batch-stats .p.pos{color:var(--growth);}
+  .batch-stats .p.neg{color:var(--danger);}
+  .batch-body{padding:0 18px 18px; border-top:1px solid var(--line); display:none;}
+  .batch-body.open{display:block;}
+
+  /* stage tracker (signature element) */
+  .drip-track{display:flex; align-items:center; margin:18px 0 20px; position:relative;}
+  .drip-line{position:absolute; left:20px; right:20px; top:11px; height:3px; background:var(--line); z-index:0; border-radius:2px;}
+  .drip-line-fill{position:absolute; left:20px; top:11px; height:3px; background:var(--water); z-index:1; border-radius:2px; transition:width .3s;}
+  .drip-stage{flex:1; position:relative; z-index:2; text-align:center;}
+  .drip-node{
+    width:24px; height:24px; border-radius:50% 50% 50% 0; transform:rotate(45deg);
+    background:var(--panel); border:2.5px solid var(--line); margin:0 auto 8px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .drip-node.done{background:var(--water); border-color:var(--water);}
+  .drip-node span{transform:rotate(-45deg); font-size:10px; color:#fff; font-weight:700;}
+  .drip-label{font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em;}
+  .drip-label.done{color:var(--water); font-weight:600;}
+  .drip-date{font-size:10px; color:var(--ink-soft); margin-top:2px; font-family:'IBM Plex Mono';}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:6px 8px; border-bottom:1px solid var(--line);}
+  td{padding:8px; border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  .num{text-align:right; font-family:'IBM Plex Mono';}
+  .cost-cat{display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:5px; background:var(--onion-wash); color:var(--onion);}
+
+  .summary-row{display:flex; gap:18px; margin-top:14px; flex-wrap:wrap;}
+  .summary-row .item{font-size:12.5px; color:var(--ink-soft);}
+  .summary-row .item b{color:var(--ink); font-family:'IBM Plex Mono'; font-weight:500;}
+
+  /* Water customers */
+  .cust-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .cust{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;}
+  .cust-head{display:flex; justify-content:space-between; align-items:flex-start;}
+  .cust-name{font-family:'Fraunces',serif; font-weight:600; font-size:16px;}
+  .cust-type{font-size:11px; color:var(--water); text-transform:uppercase; letter-spacing:.03em;}
+  .balance{font-family:'IBM Plex Mono'; font-size:18px; font-weight:500;}
+  .balance.due{color:var(--danger);}
+  .balance.clear{color:var(--growth);}
+  .meter{height:6px; background:var(--water-wash); border-radius:4px; margin:10px 0 12px; overflow:hidden;}
+  .meter-fill{height:100%; background:var(--water);}
+
+  /* modal / form */
+  .overlay{
+    position:fixed; inset:0; background:rgba(36,28,21,.45); display:none;
+    align-items:flex-start; justify-content:center; padding:40px 20px; z-index:50; overflow:auto;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--bg-alt); border-radius:var(--radius); padding:24px 26px; width:480px; max-width:100%;
+    border:1px solid var(--line);
+  }
+  .modal h3{margin:0 0 16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:4px;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:13.5px;
+    font-family:'Work Sans', sans-serif; background:#fff; color:var(--ink);
+  }
+  .field textarea{resize:vertical; min-height:50px;}
+  .field-row{display:flex; gap:10px;}
+  .field-row .field{flex:1;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
+  .close-x{all:unset; cursor:pointer; float:right; font-size:16px; color:var(--ink-soft);}
+
+  .toast{
+    position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:10px 16px;
+    border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:all .25s; z-index:100;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+
+  .icon-btn{all:unset; cursor:pointer; color:var(--ink-soft); font-size:13px; padding:2px 6px;}
+  .icon-btn:hover{color:var(--onion);}
+
+  .tips-box{
+    background:var(--growth-wash); border:1px solid #C9D6B8; border-radius:8px; padding:12px 14px; margin-bottom:14px;
+  }
+  .tips-box .tips-title{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--growth); font-weight:600; margin-bottom:6px;}
+  .tips-box ul{margin:0; padding-left:18px;}
+  .tips-box li{font-size:12.5px; margin-bottom:3px; color:var(--ink);}
+
+  .obs-list{margin-top:4px;}
+  .obs-item{border-bottom:1px solid var(--line); padding:8px 0; display:flex; justify-content:space-between; gap:10px;}
+  .obs-item:last-child{border-bottom:none;}
+  .obs-date{font-family:'IBM Plex Mono'; font-size:11px; color:var(--ink-soft); flex-shrink:0; width:90px;}
+  .obs-text{flex:1; font-size:13px;}
+
+  .insight{
+    background:var(--gold-wash); border-left:3px solid var(--gold); border-radius:6px; padding:10px 14px; margin-bottom:8px; font-size:13px;
+  }
+  .insight.warn{background:var(--onion-wash); border-left-color:var(--onion);}
+  .insight.good{background:var(--growth-wash); border-left-color:var(--growth);}
+
+  .invoice-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; margin-bottom:12px;
+  }
+  .invoice-pre{
+    background:var(--bg-alt); border:1px solid var(--line); border-radius:6px; padding:12px 14px; font-family:'IBM Plex Mono';
+    font-size:12px; white-space:pre-wrap; margin-top:8px; line-height:1.6;
+  }
+
+  @media (max-width:900px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; height:auto; position:relative; flex-direction:row; overflow-x:auto; align-items:center;}
+    .brand{margin-bottom:0; margin-right:16px;}
+    .nav{flex-direction:row;}
+    .sidebar-foot{display:none;}
+    .main{padding:20px;}
+    .cards{grid-template-columns:1fr 1fr;}
+    .cust-grid{grid-template-columns:1fr;}
+  }
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="authScreen" style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg);">
+  <div style="width:340px; max-width:90vw; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px 26px;">
+    <div class="mark" style="font-family:'Fraunces',serif; font-size:22px; font-weight:700; color:var(--onion); margin-bottom:2px;">🧅 Demwa Farm Ledger</div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:20px;">Sign in to sync your farm records across devices.</div>
+    <div class="field"><label>Email</label><input id="auth-email" type="email" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input id="auth-password" type="password" placeholder="At least 6 characters"></div>
+    <div class="field"><label>Farm code — only for Sign up</label><input id="auth-farmcode" placeholder="Leave blank to start a new farm, or enter a teammate's code to join theirs"></div>
+    <div id="authError" style="color:var(--danger); font-size:12.5px; margin-bottom:8px; display:none;"></div>
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button class="btn" style="flex:1; text-align:center;" onclick="doLogin()">Log in</button>
+      <button class="btn secondary" style="flex:1; text-align:center;" onclick="doSignup()">Sign up</button>
+    </div>
+    <div style="font-size:11.5px; color:var(--ink-soft); margin-top:14px;">First time on this farm? Leave the farm code blank and "Sign up" — you'll get a code to share with your team. Already have a code? Enter it and "Sign up" to join. Returning? Just "Log in" — no code needed.</div>
+  </div>
+</div>
+
+<div class="app" id="appShell" style="display:none;">
+  <div class="sidebar">
+    <div class="brand">
+      <div class="mark">🧅 Demwa Farm Ledger</div>
+      <div class="sub">Onion &amp; Water Records</div>
+    </div>
+    <div class="nav" id="nav">
+      <button data-tab="dashboard" class="active"><span class="dot"></span>Dashboard</button>
+      <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
+      <button data-tab="water"><span class="dot"></span>Water Customers</button>
+      <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
+    </div>
+    <div class="sidebar-foot">
+      <div id="userEmailLabel" style="margin-bottom:4px; word-break:break-all;"></div>
+      <div id="roleLabel" style="font-size:10.5px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;"></div>
+      <div style="font-size:11px; color:#8A7C64; margin-bottom:4px;">Farm code: <span id="farmCodeLabel" class="mono" style="color:var(--gold);"></span> <button class="icon-btn" style="color:#D9CFBC; padding:0 0 0 4px;" onclick="copyFarmCode()">copy</button></div>
+      <button class="icon-btn" style="color:#D9CFBC; padding:0;" onclick="doLogout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard">
+      <div class="topline">
+        <div>
+          <h1>Farm overview</h1>
+          <p id="dateToday"></p>
+        </div>
+      </div>
+      <div class="cards" id="dashCards"></div>
+
+      <section>
+        <div class="section-head"><h2>Active crop batches</h2></div>
+        <div id="dashBatches"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Water accounts with balance due</h2></div>
+        <div id="dashWater"></div>
+      </section>
+    </div>
+
+    <!-- BATCHES -->
+    <div id="tab-batches" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Crop batches</h1>
+          <p>Track each planting from seedling purchase through harvest, and every cost along the way.</p>
+        </div>
+        <button class="btn" id="btnNewBatch" onclick="openBatchModal()">+ New batch</button>
+      </div>
+      <div id="batchList"></div>
+    </div>
+
+    <!-- WATER -->
+    <div id="tab-water" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Water customers</h1>
+          <p>Borehole supply to neighbours and farmers — billing and payment records.</p>
+        </div>
+        <button class="btn water" id="btnNewCustomer" onclick="openCustomerModal()">+ New customer</button>
+      </div>
+      <div class="cards" id="waterCards" style="grid-template-columns:repeat(3,1fr);"></div>
+
+      <section>
+        <div class="section-head">
+          <h2>Monthly invoices</h2>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="month" id="invoiceMonth" style="padding:7px 10px; border:1px solid var(--line); border-radius:6px; font-family:'Work Sans'; font-size:13px;">
+            <button class="btn water small" onclick="generateMonthlyInvoices()">Generate bills</button>
+          </div>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Pulls together every water record logged in the chosen month per customer, plus any balance carried over, into a bill you can send.</p>
+        <div id="invoiceResults"></div>
+      </section>
+
+      <div class="cust-grid" id="custList"></div>
+    </div>
+
+    <!-- REPORTS -->
+    <div id="tab-reports" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Profit &amp; loss</h1>
+          <p>Each batch — from seed purchase to harvest and sale — is its own season. Compare them here alongside water income.</p>
+        </div>
+        <select id="seasonFilter" onchange="renderReports()" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-family:'Work Sans'; font-size:13px;">
+          <option value="all">All seasons</option>
+        </select>
+      </div>
+      <div class="cards" id="reportCards"></div>
+
+      <section>
+        <div class="section-head"><h2>Crop batches — profit by planting</h2></div>
+        <div id="reportBatchTable"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Water supply — income summary</h2></div>
+        <div id="reportWaterTable"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Suggested areas to improve next season</h2></div>
+        <div id="insightsList"></div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ====================================================================
+   FIREBASE SETUP — paste your own project's config below.
+   Get this from: Firebase Console > Project settings > General >
+   "Your apps" > Web app > SDK setup and configuration.
+   ==================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyB1ynCz4OluV0hQzdE37bO14XMDE2tkFI0",
+  authDomain: "shamba-ledger-a217f.firebaseapp.com",
+  projectId: "shamba-ledger-a217f",
+  storageBucket: "shamba-ledger-a217f.firebasestorage.app",
+  messagingSenderId: "1072898908008",
+  appId: "1:1072898908008:web:3017849ebb3cc1707980dd"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+db.enablePersistence({synchronizeTabs:true}).catch(()=>{ /* offline cache unavailable in this browser — app still works online */ });
+
+let currentUid = null;
+let currentFarmId = null;
+let currentRole = 'owner';
+let farmDocRef = null;
+
+function isOwner(){ return currentRole === 'owner'; }
+function requireOwner(){
+  if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return false; }
+  return true;
+}
+
+/* ---------------- Auth screen wiring ---------------- */
+function authErr(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+}
+function genFarmCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0, I/1 — avoids mix-ups
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+async function doSignup(){
+  authErr('');
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-password').value;
+  const enteredCode = document.getElementById('auth-farmcode').value.trim().toUpperCase();
+  if(!email || pass.length<6){ authErr('Enter an email and a password of at least 6 characters.'); return; }
+  try{
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    const farmId = enteredCode || genFarmCode();
+    const role = enteredCode ? 'viewer' : 'owner';
+    await db.collection('users').doc(cred.user.uid).set({email, farmId, role});
+    if(!enteredCode){
+      // brand new farm — show the code once, prominently, before the app loads
+      setTimeout(()=>alert(`Your new farm code is: ${farmId}\n\nShare this with anyone who should be able to log in and view records — they enter it in the "Farm code" box when they Sign up. They'll be able to view everything but not edit it. Keep a copy of this code somewhere safe.`), 300);
+    }
+  } catch(e){ authErr(e.message); }
+}
+async function doLogin(){
+  authErr('');
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-password').value;
+  if(!email || !pass){ authErr('Enter your email and password.'); return; }
+  try{ await auth.signInWithEmailAndPassword(email, pass); }
+  catch(e){ authErr(e.message); }
+}
+async function doLogout(){
+  await auth.signOut();
+}
+async function copyFarmCode(){
+  if(!currentFarmId) return;
+  const text = currentFarmId;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>showToast('Farm code copied')).catch(()=>fallbackCopy(text));
+  } else fallbackCopy(text);
+}
+
+auth.onAuthStateChanged(async (user)=>{
+  if(user){
+    currentUid = user.uid;
+    try{
+      const userSnap = await db.collection('users').doc(user.uid).get();
+      if(userSnap.exists && userSnap.data().farmId){
+        currentFarmId = userSnap.data().farmId;
+        currentRole = userSnap.data().role || 'owner';
+      } else {
+        // account created before farm codes existed — migrate them onto a farm
+        // code equal to their old private doc, so none of their existing data moves,
+        // and they keep owner rights since they were the sole user before.
+        currentFarmId = user.uid;
+        currentRole = 'owner';
+        await db.collection('users').doc(user.uid).set({email:user.email, farmId:currentFarmId, role:'owner'});
+      }
+    } catch(e){
+      console.error('could not resolve farm', e);
+      showToast('Could not connect — check your internet connection');
+      currentFarmId = user.uid;
+      currentRole = 'owner';
+    }
+    farmDocRef = db.collection('farms').doc(currentFarmId);
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    document.getElementById('userEmailLabel').textContent = user.email;
+    document.getElementById('farmCodeLabel').textContent = currentFarmId;
+    const roleEl = document.getElementById('roleLabel');
+    roleEl.textContent = isOwner() ? 'Owner — full access' : 'View only';
+    roleEl.style.color = isOwner() ? 'var(--growth-wash)' : '#E0B84A';
+    document.getElementById('btnNewBatch').style.display = isOwner() ? '' : 'none';
+    document.getElementById('btnNewCustomer').style.display = isOwner() ? '' : 'none';
+    await loadFarmData();
+    renderAll();
+  } else {
+    currentUid = null; currentFarmId = null; currentRole = 'owner'; farmDocRef = null;
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('appShell').style.display = 'none';
+  }
+});
+
+/* ---------------- Firestore data layer ---------------- */
+async function loadFarmData(){
+  try{
+    const snap = await farmDocRef.get();
+    const data = snap.exists ? snap.data() : {};
+    batches = data.batches || [];
+    customers = data.customers || [];
+  } catch(e){
+    console.error('load failed', e);
+    showToast('Could not load your data — check your connection');
+    batches = []; customers = [];
+  }
+}
+async function saveFarmData(){
+  if(!farmDocRef) return;
+  if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return; }
+  try{ await farmDocRef.set({batches, customers}, {merge:true}); }
+  catch(e){ console.error('save failed', e); showToast('Could not save — will retry once you\'re back online'); }
+}
+/* storeSet('batches', batches) / storeSet('customers', customers) calls throughout
+
+   the app both write to the same synced document, so either call persists everything. */
+async function storeSet(key, value){ await saveFarmData(); }
+
+let batches = [];
+let customers = [];
+
+const STAGE_DEFS = [
+  {key:'seedling', label:'Seedling\nPurchase'},
+  {key:'nursery', label:'Nursery'},
+  {key:'transplant', label:'Transplanting'},
+  {key:'growth', label:'Growth &\nMaintenance'},
+  {key:'harvest', label:'Harvest'}
+];
+const COST_CATS = ['Seeds','Nursery Inputs','Labour','Fertilizer','Pesticide/Fungicide','Water & Solar Maintenance','Transport','Other'];
+const CURRENCY = 'KES';
+
+function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function fmt(n){ return CURRENCY + ' ' + (Math.round((n||0)*100)/100).toLocaleString(); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function seasonFromDate(d){ const y = (d||todayISO()).slice(0,4); return y; }
+function monthLabel(m){ const [y,mo]=m.split('-'); return new Date(y,mo-1,1).toLocaleDateString('en-GB',{month:'long', year:'numeric'}); }
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------------- Init ---------------- */
+function init(){
+  document.getElementById('dateToday').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  document.getElementById('invoiceMonth').value = new Date().toISOString().slice(0,7);
+}
+
+function renderAll(){
+  renderDashboard();
+  renderBatches();
+  renderWater();
+}
+
+/* ---------------- Calculations ---------------- */
+function batchCost(batch){
+  return (batch.costs||[]).reduce((s,c)=>s+Number(c.amount||0),0);
+}
+function batchRevenue(batch){
+  const h = batch.stages.harvest;
+  if(h && h.done && h.yieldKg && h.pricePerKg) return Number(h.yieldKg)*Number(h.pricePerKg);
+  return 0;
+}
+function batchProfit(batch){ return batchRevenue(batch) - batchCost(batch); }
+function batchStatus(batch){ return batch.stages.harvest.done ? 'harvested' : 'active'; }
+function stagesCompleted(batch){ return STAGE_DEFS.filter(s=>batch.stages[s.key].done).length; }
+
+function customerTotals(cust){
+  const billed = (cust.bills||[]).reduce((s,b)=>s+Number(b.amount||0),0);
+  const paid = (cust.bills||[]).filter(b=>b.paid).reduce((s,b)=>s+Number(b.amount||0),0);
+  return {billed, paid, balance: billed-paid};
+}
+
+/* ---------------- Dashboard ---------------- */
+function renderDashboard(){
+  const activeBatches = batches.filter(b=>batchStatus(b)==='active');
+  const totalCost = batches.reduce((s,b)=>s+batchCost(b),0);
+  const totalRevenue = batches.reduce((s,b)=>s+batchRevenue(b),0);
+  const totalProfit = totalRevenue - totalCost;
+  const waterTotals = customers.reduce((acc,c)=>{
+    const t = customerTotals(c);
+    acc.billed += t.billed; acc.paid += t.paid; acc.balance += t.balance;
+    return acc;
+  }, {billed:0,paid:0,balance:0});
+
+  document.getElementById('dashCards').innerHTML = `
+    <div class="card onion"><div class="label">Active crop batches</div><div class="value">${activeBatches.length}</div></div>
+    <div class="card growth"><div class="label">Total crop cost (all-time)</div><div class="value">${fmt(totalCost)}</div></div>
+    <div class="card gold"><div class="label">Crop profit / loss</div><div class="value" style="color:${totalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(totalProfit)}</div></div>
+    <div class="card water"><div class="label">Water balance outstanding</div><div class="value">${fmt(waterTotals.balance)}</div></div>
+  `;
+
+  const ab = activeBatches.slice(0,4);
+  document.getElementById('dashBatches').innerHTML = ab.length ? ab.map(b=>`
+    <div class="batch" style="margin-bottom:10px;">
+      <div class="batch-head" onclick="goTo('batches')">
+        <div>
+          <div class="batch-title">${escapeHtml(b.cropType)} — ${escapeHtml(b.variety||'')}</div>
+          <div class="batch-meta">${stagesCompleted(b)}/5 stages complete · started ${b.startDate||'—'}</div>
+        </div>
+        <div class="batch-stats"><div class="p">${fmt(batchCost(b))} spent</div></div>
+      </div>
+    </div>
+  `).join('') : `<div class="empty">No active batches yet. Head to <b>Crop Batches</b> to start one.</div>`;
+
+  const dueCustomers = customers.map(c=>({c, t:customerTotals(c)})).filter(x=>x.t.balance>0).sort((a,b)=>b.t.balance-a.t.balance).slice(0,5);
+  document.getElementById('dashWater').innerHTML = dueCustomers.length ? `
+    <table><thead><tr><th>Customer</th><th>Type</th><th class="num">Balance due</th></tr></thead><tbody>
+    ${dueCustomers.map(x=>`<tr><td>${escapeHtml(x.c.name)}</td><td>${escapeHtml(x.c.type)}</td><td class="num" style="color:var(--danger)">${fmt(x.t.balance)}</td></tr>`).join('')}
+    </tbody></table>` : `<div class="empty">No outstanding water balances.</div>`;
+}
+
+function goTo(tab){
+  document.querySelectorAll('#nav button').forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
+  document.getElementById('tab-dashboard').style.display = tab==='dashboard' ? 'block':'none';
+  document.getElementById('tab-batches').style.display = tab==='batches' ? 'block':'none';
+  document.getElementById('tab-water').style.display = tab==='water' ? 'block':'none';
+  document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
+  if(tab==='reports') renderReports();
+}
+document.getElementById('nav').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(btn) goTo(btn.dataset.tab);
+});
+
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ---------------- Batches ---------------- */
+function blankBatch(){
+  return {
+    id: uid(), cropType:'Onion', variety:'', areaAcres:'', startDate: todayISO(), season:'', notes:'',
+    stages:{
+      seedling:{done:false, date:'', notes:''},
+      nursery:{done:false, dateStart:'', dateReady:'', notes:''},
+      transplant:{done:false, date:'', notes:''},
+      growth:{done:false, notes:''},
+      harvest:{done:false, date:'', yieldKg:'', pricePerKg:'', notes:''}
+    },
+    costs: [],
+    observations: [],
+    openInUI:true
+  };
+}
+
+const STAGE_TIPS = {
+  seedling: [
+    'Buy certified, disease-free seed from a reputable stockist and keep the receipt for your cost record.',
+    'Check seed germination rate before large purchases — a quick paper-towel test saves a wasted nursery.',
+    'Match variety to your market and season length (short vs long day onions, storage vs fresh sale).'
+  ],
+  nursery: [
+    'Raise beds and use well-composted soil to reduce damping-off disease.',
+    'Water lightly but consistently — nursery beds dry out fast and seedlings are easily stressed.',
+    'Thin overcrowded seedlings early so the rest grow strong, uniform stems.',
+    'Harden off seedlings (reduce shade/water gradually) for a few days before transplanting.'
+  ],
+  transplant: [
+    'Transplant in the cool of the evening or on an overcast day to reduce shock.',
+    'Space bulbs properly for your variety — overcrowding is a common cause of small bulbs.',
+    'Set drip lines and check emitter spacing matches row spacing before planting, not after.'
+  ],
+  growth: [
+    'Split fertilizer applications rather than one heavy dose — matches uptake and cuts waste.',
+    'Scout for thrips and downy mildew weekly; early treatment is far cheaper than a late rescue spray.',
+    'Keep drip laterals flushed to avoid clogging, especially with borehole water that carries fine sediment.',
+    'Log every input as a cost entry as you apply it — it is much harder to reconstruct later.'
+  ],
+  harvest: [
+    'Stop irrigation 1–2 weeks before harvest to help necks cure and reduce storage rot.',
+    'Cure bulbs in a well-ventilated, shaded area before storage or sale.',
+    'Record yield and sale price promptly — this is what makes next season\'s profit and loss meaningful.',
+    'Compare this batch\'s cost per kg against past seasons on the Profit & Loss page.'
+  ]
+};
+
+function renderBatches(){
+  const el = document.getElementById('batchList');
+  if(!batches.length){ el.innerHTML = `<div class="empty">No crop batches yet. Click <b>+ New batch</b> to log your first onion planting — or any other crop grown on the farm.</div>`; return; }
+
+  el.innerHTML = batches.slice().reverse().map(b=>{
+    const cost = batchCost(b), revenue = batchRevenue(b), profit = batchProfit(b);
+    const status = batchStatus(b);
+    const done = stagesCompleted(b);
+    const fillPct = (done/STAGE_DEFS.length)*100;
+    return `
+    <div class="batch">
+      <div class="batch-head" onclick="toggleBatch('${b.id}')">
+        <div>
+          <div class="batch-title">${escapeHtml(b.cropType)}${b.variety?(' — '+escapeHtml(b.variety)):''} <span class="badge ${status}">${status}</span></div>
+          <div class="batch-meta">${b.season? escapeHtml(b.season)+' · ':''}${b.areaAcres? b.areaAcres+' acres · ':''}started ${b.startDate||'—'} · ${done}/5 stages complete</div>
+        </div>
+        <div class="batch-stats">
+          <div class="p">${fmt(cost)} cost</div>
+          ${status==='harvested' ? `<div class="p ${profit>=0?'pos':'neg'}">${fmt(profit)} profit</div>` : ''}
+        </div>
+      </div>
+      <div class="batch-body ${b.openInUI?'open':''}" id="body-${b.id}">
+        <div class="drip-track">
+          <div class="drip-line"></div>
+          <div class="drip-line-fill" style="width:${fillPct}%"></div>
+          ${STAGE_DEFS.map(s=>{
+            const st = b.stages[s.key];
+            const dateShown = s.key==='nursery' ? (st.dateReady||st.dateStart) : (s.key==='harvest'?st.date:st.date);
+            return `<div class="drip-stage">
+              <div class="drip-node ${st.done?'done':''}" onclick="event.stopPropagation(); openStageModal('${b.id}','${s.key}')">
+                <span>${st.done?'✓':''}</span>
+              </div>
+              <div class="drip-label ${st.done?'done':''}">${s.label.split('\\n')[0]}<br>${s.label.split('\\n')[1]||''}</div>
+              <div class="drip-date">${dateShown||''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <div class="section-head" style="margin-top:6px;">
+          <h2 style="font-size:14px;">Cost ledger</h2>
+          <button class="btn secondary small" onclick="event.stopPropagation(); openCostModal('${b.id}')">+ Add cost</button>
+        </div>
+        ${b.costs.length ? `
+        <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+        <tbody>
+        ${b.costs.slice().reverse().map(c=>`
+          <tr>
+            <td>${c.date||''}</td>
+            <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
+            <td>${escapeHtml(c.description||'')}</td>
+            <td class="num">${fmt(c.amount)}</td>
+            <td><button class="icon-btn" onclick="event.stopPropagation(); deleteCost('${b.id}','${c.id}')">✕</button></td>
+          </tr>
+        `).join('')}
+        </tbody></table>` : `<div class="empty">No costs logged yet for this batch.</div>`}
+
+        <div class="summary-row">
+          <div class="item">Total cost: <b>${fmt(cost)}</b></div>
+          ${status==='harvested' ? `
+          <div class="item">Yield: <b>${b.stages.harvest.yieldKg||0} kg</b></div>
+          <div class="item">Revenue: <b>${fmt(revenue)}</b></div>
+          <div class="item">Cost per kg: <b>${b.stages.harvest.yieldKg ? fmt(cost/b.stages.harvest.yieldKg) : '—'}</b></div>
+          <div class="item">Profit / loss: <b style="color:${profit>=0?'var(--growth)':'var(--danger)'}">${fmt(profit)}</b></div>
+          ` : ''}
+        </div>
+
+        <div class="section-head" style="margin-top:18px;">
+          <h2 style="font-size:14px;">Field notes &amp; observations</h2>
+          <button class="btn secondary small" onclick="event.stopPropagation(); openObservationModal('${b.id}')">+ Add note</button>
+        </div>
+        ${(b.observations&&b.observations.length) ? `
+        <div class="obs-list">
+          ${b.observations.slice().reverse().map(o=>`
+            <div class="obs-item">
+              <div class="obs-date">${o.date||''}</div>
+              <div class="obs-text">${escapeHtml(o.text)}</div>
+              <button class="icon-btn" onclick="event.stopPropagation(); deleteObservation('${b.id}','${o.id}')">✕</button>
+            </div>
+          `).join('')}
+        </div>` : `<div class="empty" style="padding:14px;">Nothing logged yet — jot down pest sightings, weather, irrigation issues or anything worth remembering next season.</div>`}
+
+        <div style="margin-top:14px; text-align:right;">
+          <button class="icon-btn" onclick="event.stopPropagation(); deleteBatch('${b.id}')" style="color:var(--danger);">Delete batch</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleBatch(id){
+  const b = batches.find(x=>x.id===id);
+  b.openInUI = !b.openInUI;
+  renderBatches();
+}
+
+async function deleteBatch(id){
+  if(!requireOwner()) return;
+  if(!confirm('Delete this batch and all its cost records? This cannot be undone.')) return;
+  batches = batches.filter(b=>b.id!==id);
+  await storeSet('batches', batches);
+  renderAll();
+  showToast('Batch deleted');
+}
+
+async function deleteCost(batchId, costId){
+  if(!requireOwner()) return;
+  const b = batches.find(x=>x.id===batchId);
+  b.costs = b.costs.filter(c=>c.id!==costId);
+  await storeSet('batches', batches);
+  renderAll();
+}
+
+/* ---- Modals: batch ---- */
+function openBatchModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>New crop batch</h3>
+    <div class="field-row">
+      <div class="field"><label>Crop type</label><input id="f-crop" value="Onion"></div>
+      <div class="field"><label>Variety</label><input id="f-variety" placeholder="e.g. Red Creole"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Area (acres)</label><input id="f-area" type="number" step="0.1" placeholder="e.g. 2"></div>
+      <div class="field"><label>Start date (seedling purchase)</label><input id="f-start" type="date" value="${todayISO()}"></div>
+    </div>
+    <div class="field"><label>Season name (this batch, seed purchase to harvest, is its own season)</label><input id="f-season" placeholder="e.g. Batch 1" value="Batch ${batches.length+1}"></div>
+    <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Optional"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveNewBatch()">Create batch</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveNewBatch(){
+  if(!requireOwner()) return;
+  const b = blankBatch();
+  b.cropType = document.getElementById('f-crop').value.trim() || 'Onion';
+  b.variety = document.getElementById('f-variety').value.trim();
+  b.areaAcres = document.getElementById('f-area').value;
+  b.startDate = document.getElementById('f-start').value || todayISO();
+  b.season = document.getElementById('f-season').value.trim() || `${b.cropType} — ${b.startDate}`;
+  b.notes = document.getElementById('f-notes').value.trim();
+  b.stages.seedling.done = true;
+  b.stages.seedling.date = b.startDate;
+  batches.push(b);
+  await storeSet('batches', batches);
+  closeModal();
+  renderAll();
+  showToast('Batch created');
+}
+
+/* ---- Modals: stage ---- */
+function openStageModal(batchId, stageKey){
+  const b = batches.find(x=>x.id===batchId);
+  const st = b.stages[stageKey];
+  const def = STAGE_DEFS.find(s=>s.key===stageKey);
+  const box = document.getElementById('modalBox');
+  let fields = '';
+  if(stageKey==='nursery'){
+    fields = `
+      <div class="field-row">
+        <div class="field"><label>Nursery start date</label><input id="s-datestart" type="date" value="${st.dateStart||''}"></div>
+        <div class="field"><label>Ready to transplant</label><input id="s-dateready" type="date" value="${st.dateReady||''}"></div>
+      </div>`;
+  } else if(stageKey==='harvest'){
+    fields = `
+      <div class="field"><label>Harvest date</label><input id="s-date" type="date" value="${st.date||''}"></div>
+      <div class="field-row">
+        <div class="field"><label>Yield (kg)</label><input id="s-yield" type="number" value="${st.yieldKg||''}"></div>
+        <div class="field"><label>Price per kg (${CURRENCY})</label><input id="s-price" type="number" value="${st.pricePerKg||''}"></div>
+      </div>`;
+  } else {
+    fields = `<div class="field"><label>Date</label><input id="s-date" type="date" value="${st.date||''}"></div>`;
+  }
+  const tips = STAGE_TIPS[stageKey] || [];
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${def.label.replace('\\n',' ')}</h3>
+    ${tips.length ? `<div class="tips-box"><div class="tips-title">Suggested areas of improvement</div><ul>${tips.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul></div>` : ''}
+    ${fields}
+    <div class="field"><label>Notes for this stage</label><textarea id="s-notes">${escapeHtml(st.notes||'')}</textarea></div>
+    <div class="modal-actions">
+      ${st.done ? `<button class="btn secondary" onclick="markStage('${batchId}','${stageKey}', false)">Mark incomplete</button>` : ''}
+      <button class="btn" onclick="markStage('${batchId}','${stageKey}', true)">${st.done?'Save':'Mark complete & save'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function markStage(batchId, stageKey, done){
+  if(!requireOwner()) return;
+  const b = batches.find(x=>x.id===batchId);
+  const st = b.stages[stageKey];
+  st.done = done;
+  st.notes = document.getElementById('s-notes').value.trim();
+  if(stageKey==='nursery'){
+    st.dateStart = document.getElementById('s-datestart').value;
+    st.dateReady = document.getElementById('s-dateready').value;
+  } else if(stageKey==='harvest'){
+    st.date = document.getElementById('s-date').value;
+    st.yieldKg = document.getElementById('s-yield').value;
+    st.pricePerKg = document.getElementById('s-price').value;
+  } else {
+    st.date = document.getElementById('s-date').value;
+  }
+  await storeSet('batches', batches);
+  closeModal();
+  renderAll();
+}
+
+/* ---- Modals: cost ---- */
+function openCostModal(batchId){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add cost entry</h3>
+    <div class="field-row">
+      <div class="field"><label>Category</label>
+        <select id="c-cat">${COST_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Date</label><input id="c-date" type="date" value="${todayISO()}"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="c-desc" placeholder="e.g. DAP fertilizer, 2 bags"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="c-amount" type="number" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveCost('${batchId}')">Add cost</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveCost(batchId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('c-amount').value || 0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const b = batches.find(x=>x.id===batchId);
+  b.costs.push({
+    id: uid(),
+    category: document.getElementById('c-cat').value,
+    date: document.getElementById('c-date').value,
+    description: document.getElementById('c-desc').value.trim(),
+    amount
+  });
+  await storeSet('batches', batches);
+  closeModal();
+  renderAll();
+  showToast('Cost added');
+}
+
+/* ---- Modals: observations ---- */
+function openObservationModal(batchId){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add field note</h3>
+    <div class="field"><label>Date</label><input id="o-date" type="date" value="${todayISO()}"></div>
+    <div class="field"><label>Observation</label><textarea id="o-text" placeholder="e.g. Thrips spotted on outer rows, sprayed same day"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveObservation('${batchId}')">Save note</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveObservation(batchId){
+  if(!requireOwner()) return;
+  const text = document.getElementById('o-text').value.trim();
+  if(!text){ showToast('Write a note first'); return; }
+  const b = batches.find(x=>x.id===batchId);
+  b.observations = b.observations || [];
+  b.observations.push({id: uid(), date: document.getElementById('o-date').value, text});
+  await storeSet('batches', batches);
+  closeModal();
+  renderAll();
+}
+async function deleteObservation(batchId, obsId){
+  if(!requireOwner()) return;
+  const b = batches.find(x=>x.id===batchId);
+  b.observations = (b.observations||[]).filter(o=>o.id!==obsId);
+  await storeSet('batches', batches);
+  renderAll();
+}
+
+/* ---------------- Water customers ---------------- */
+function renderWater(){
+  const totals = customers.reduce((acc,c)=>{
+    const t = customerTotals(c);
+    acc.billed += t.billed; acc.paid += t.paid; acc.balance += t.balance;
+    return acc;
+  }, {billed:0,paid:0,balance:0});
+  document.getElementById('waterCards').innerHTML = `
+    <div class="card water"><div class="label">Total billed</div><div class="value">${fmt(totals.billed)}</div></div>
+    <div class="card growth"><div class="label">Total collected</div><div class="value">${fmt(totals.paid)}</div></div>
+    <div class="card gold"><div class="label">Outstanding balance</div><div class="value">${fmt(totals.balance)}</div></div>
+  `;
+
+  const el = document.getElementById('custList');
+  if(!customers.length){ el.innerHTML = `<div class="empty" style="grid-column:1/-1;">No water customers yet. Click <b>+ New customer</b> to add a neighbour or farmer you supply.</div>`; return; }
+
+  el.innerHTML = customers.slice().reverse().map(c=>{
+    const t = customerTotals(c);
+    const pct = t.billed>0 ? Math.min(100, (t.paid/t.billed)*100) : 0;
+    return `
+    <div class="cust">
+      <div class="cust-head">
+        <div>
+          <div class="cust-name">${escapeHtml(c.name)}</div>
+          <div class="cust-type">${escapeHtml(c.type)}${c.phone?(' · '+escapeHtml(c.phone)):''}</div>
+        </div>
+        <div class="balance ${t.balance>0?'due':'clear'}">${fmt(t.balance)}</div>
+      </div>
+      <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
+      <div class="summary-row" style="margin-top:0;">
+        <div class="item">Rate: <b>${fmt(c.ratePerUnit)} / ${escapeHtml(c.unitLabel)}</b></div>
+        <div class="item">Billed: <b>${fmt(t.billed)}</b></div>
+        <div class="item">Paid: <b>${fmt(t.paid)}</b></div>
+      </div>
+      <div class="section-head" style="margin-top:12px; margin-bottom:6px;">
+        <h2 style="font-size:13px;">Billing history</h2>
+        <button class="btn water small" onclick="openBillModal('${c.id}')">+ Add bill</button>
+      </div>
+      ${c.bills.length ? `
+      <table><thead><tr><th>Date</th><th class="num">Units</th><th class="num">Amount</th><th>Paid</th><th></th></tr></thead>
+      <tbody>
+      ${c.bills.slice().reverse().map(bl=>`
+        <tr>
+          <td>${bl.date||''}</td>
+          <td class="num">${bl.units||''}</td>
+          <td class="num">${fmt(bl.amount)}</td>
+          <td>
+            <button class="icon-btn" style="color:${bl.paid?'var(--growth)':'var(--danger)'}" onclick="togglePaid('${c.id}','${bl.id}')">${bl.paid?'✓ Paid':'Unpaid'}</button>
+          </td>
+          <td><button class="icon-btn" onclick="deleteBill('${c.id}','${bl.id}')">✕</button></td>
+        </tr>
+      `).join('')}
+      </tbody></table>` : `<div class="empty" style="padding:14px;">No bills logged yet.</div>`}
+      <div style="margin-top:10px; text-align:right;">
+        <button class="icon-btn" onclick="deleteCustomer('${c.id}')" style="color:var(--danger);">Delete customer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function blankCustomer(){
+  return {id: uid(), name:'', phone:'', type:'Household', ratePerUnit:'', unitLabel:'1000L', bills:[]};
+}
+function openCustomerModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>New water customer</h3>
+    <div class="field"><label>Name</label><input id="cu-name" placeholder="e.g. Mama Wanjiku"></div>
+    <div class="field-row">
+      <div class="field"><label>Phone</label><input id="cu-phone" placeholder="Optional"></div>
+      <div class="field"><label>Type</label>
+        <select id="cu-type"><option>Household</option><option>Farmer</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Rate (${CURRENCY})</label><input id="cu-rate" type="number" step="0.01" placeholder="e.g. 50"></div>
+      <div class="field"><label>Per unit</label><input id="cu-unit" placeholder="e.g. 1000L, jerrycan, m3" value="1000L"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn water" onclick="saveNewCustomer()">Add customer</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveNewCustomer(){
+  if(!requireOwner()) return;
+  const name = document.getElementById('cu-name').value.trim();
+  if(!name){ showToast('Enter a name'); return; }
+  const c = blankCustomer();
+  c.name = name;
+  c.phone = document.getElementById('cu-phone').value.trim();
+  c.type = document.getElementById('cu-type').value;
+  c.ratePerUnit = document.getElementById('cu-rate').value;
+  c.unitLabel = document.getElementById('cu-unit').value.trim() || '1000L';
+  customers.push(c);
+  await storeSet('customers', customers);
+  closeModal();
+  renderAll();
+  showToast('Customer added');
+}
+async function deleteCustomer(id){
+  if(!requireOwner()) return;
+  if(!confirm('Delete this customer and their billing history?')) return;
+  customers = customers.filter(c=>c.id!==id);
+  await storeSet('customers', customers);
+  renderAll();
+}
+
+function openBillModal(custId){
+  const c = customers.find(x=>x.id===custId);
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add bill — ${escapeHtml(c.name)}</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="b-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Units supplied (${escapeHtml(c.unitLabel)})</label><input id="b-units" type="number" step="0.1" oninput="autofillAmount(${JSON.stringify(c.ratePerUnit)})"></div>
+    </div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="b-amount" type="number" step="0.01"></div>
+    <div class="field">
+      <label><input type="checkbox" id="b-paid" style="width:auto; display:inline-block; margin-right:6px;">Already paid</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn water" onclick="saveBill('${custId}')">Add bill</button>
+    </div>
+  `;
+  openModal();
+}
+function autofillAmount(rate){
+  const units = Number(document.getElementById('b-units').value||0);
+  if(rate) document.getElementById('b-amount').value = (units*Number(rate)).toFixed(2);
+}
+async function saveBill(custId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('b-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const c = customers.find(x=>x.id===custId);
+  c.bills.push({
+    id: uid(),
+    date: document.getElementById('b-date').value,
+    units: document.getElementById('b-units').value,
+    amount,
+    paid: document.getElementById('b-paid').checked,
+    paidDate: document.getElementById('b-paid').checked ? todayISO() : ''
+  });
+  await storeSet('customers', customers);
+  closeModal();
+  renderAll();
+  showToast('Bill added');
+}
+async function togglePaid(custId, billId){
+  if(!requireOwner()) return;
+  const c = customers.find(x=>x.id===custId);
+  const bl = c.bills.find(b=>b.id===billId);
+  bl.paid = !bl.paid;
+  bl.paidDate = bl.paid ? todayISO() : '';
+  await storeSet('customers', customers);
+  renderWater();
+}
+async function deleteBill(custId, billId){
+  if(!requireOwner()) return;
+  const c = customers.find(x=>x.id===custId);
+  c.bills = c.bills.filter(b=>b.id!==billId);
+  await storeSet('customers', customers);
+  renderAll();
+}
+
+/* ---------------- Monthly water invoices ---------------- */
+let _invoiceTexts = {};
+function generateMonthlyInvoices(){
+  const month = document.getElementById('invoiceMonth').value;
+  if(!month){ showToast('Pick a month first'); return; }
+  _invoiceTexts = {};
+  const rows = customers.map(c=>{
+    const bills = c.bills||[];
+    const inMonth = bills.filter(b=>(b.date||'').slice(0,7)===month);
+    const priorUnpaid = bills.filter(b=>(b.date||'').slice(0,7)<month && !b.paid);
+    const priorBalance = priorUnpaid.reduce((s,b)=>s+Number(b.amount||0),0);
+    const monthTotal = inMonth.reduce((s,b)=>s+Number(b.amount||0),0);
+    const totalDue = priorBalance + monthTotal;
+    return {c, inMonth, priorBalance, monthTotal, totalDue};
+  }).filter(r=>r.inMonth.length>0 || r.priorBalance>0);
+
+  const el = document.getElementById('invoiceResults');
+  if(!rows.length){ el.innerHTML = `<div class="empty">No water records found for ${monthLabel(month)}.</div>`; return; }
+
+  el.innerHTML = rows.map(r=>{
+    const lines = r.inMonth.length ? r.inMonth.map(b=>`  ${b.date}   ${String(b.units||'').padEnd(8)} ${r.c.unitLabel}   ${fmt(b.amount)}`).join('\n') : '  (no new supply logged this month)';
+    const text =
+`DEMWA FARM LEDGER — WATER BILL
+Customer: ${r.c.name}${r.c.phone? ' ('+r.c.phone+')':''}
+Billing period: ${monthLabel(month)}
+------------------------------------------
+${lines}
+------------------------------------------
+This period:              ${fmt(r.monthTotal)}
+Balance brought forward:  ${fmt(r.priorBalance)}
+TOTAL DUE:                 ${fmt(r.totalDue)}
+
+Rate: ${fmt(r.c.ratePerUnit)} per ${r.c.unitLabel}
+Please settle at your earliest convenience. Thank you for your custom.`;
+    _invoiceTexts[r.c.id] = text;
+    return `
+    <div class="invoice-card">
+      <div class="cust-head">
+        <div>
+          <div class="cust-name">${escapeHtml(r.c.name)}</div>
+          <div class="cust-type">${monthLabel(month)}</div>
+        </div>
+        <div class="balance ${r.totalDue>0?'due':'clear'}">${fmt(r.totalDue)}</div>
+      </div>
+      <pre class="invoice-pre">${escapeHtml(text)}</pre>
+      <div style="margin-top:8px; text-align:right;">
+        <button class="btn secondary small" onclick="copyInvoice('${r.c.id}')">Copy bill text</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function copyInvoice(custId){
+  const text = _invoiceTexts[custId];
+  if(!text) return;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>showToast('Bill copied — paste it into WhatsApp, SMS or email')).catch(()=>fallbackCopy(text));
+  } else fallbackCopy(text);
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); showToast('Bill copied'); } catch(e){ showToast('Could not copy — select and copy manually'); }
+  document.body.removeChild(ta);
+}
+
+/* ---------------- Reports / Profit & Loss ---------------- */
+function renderReports(){
+  const seasons = Array.from(new Set(batches.map(b=>b.season).filter(Boolean))).sort();
+  const sel = document.getElementById('seasonFilter');
+  const current = sel.value || 'all';
+  sel.innerHTML = `<option value="all">All seasons</option>` + seasons.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  sel.value = seasons.includes(current) ? current : 'all';
+
+  const filtered = sel.value==='all' ? batches : batches.filter(b=>b.season===sel.value);
+
+  const cropCost = filtered.reduce((s,b)=>s+batchCost(b),0);
+  const cropRevenue = filtered.reduce((s,b)=>s+batchRevenue(b),0);
+  const cropProfit = cropRevenue - cropCost;
+  const waterTotals = customers.reduce((acc,c)=>{ const t=customerTotals(c); acc.billed+=t.billed; acc.paid+=t.paid; acc.balance+=t.balance; return acc; },{billed:0,paid:0,balance:0});
+  const netBusiness = cropProfit + waterTotals.billed;
+
+  document.getElementById('reportCards').innerHTML = `
+    <div class="card onion"><div class="label">Crop revenue</div><div class="value">${fmt(cropRevenue)}</div></div>
+    <div class="card growth"><div class="label">Crop cost</div><div class="value">${fmt(cropCost)}</div></div>
+    <div class="card gold"><div class="label">Crop profit / loss</div><div class="value" style="color:${cropProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(cropProfit)}</div></div>
+    <div class="card water"><div class="label">Combined business net</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
+  `;
+
+  document.getElementById('reportBatchTable').innerHTML = filtered.length ? `
+    <table><thead><tr><th>Season</th><th>Crop</th><th>Status</th><th class="num">Length</th><th class="num">Cost</th><th class="num">Revenue</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead>
+    <tbody>
+    ${filtered.map(b=>{
+      const cost=batchCost(b), rev=batchRevenue(b), profit=rev-cost, margin = rev>0 ? ((profit/rev)*100).toFixed(1)+'%' : '—';
+      const h = b.stages.harvest;
+      let lengthLabel = '—';
+      if(h.done && h.date && b.startDate){
+        const days = Math.round((new Date(h.date) - new Date(b.startDate)) / 86400000);
+        if(days>=0) lengthLabel = days + ' days';
+      }
+      return `<tr>
+        <td>${escapeHtml(b.season||'—')}</td>
+        <td>${escapeHtml(b.cropType)}${b.variety?' — '+escapeHtml(b.variety):''}</td>
+        <td>${batchStatus(b)}</td>
+        <td class="num">${lengthLabel}</td>
+        <td class="num">${fmt(cost)}</td>
+        <td class="num">${fmt(rev)}</td>
+        <td class="num" style="color:${profit>=0?'var(--growth)':'var(--danger)'}">${fmt(profit)}</td>
+        <td class="num">${margin}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>` : `<div class="empty">No batches in this season yet.</div>`;
+
+  document.getElementById('reportWaterTable').innerHTML = customers.length ? `
+    <table><thead><tr><th>Customer</th><th>Type</th><th class="num">Billed</th><th class="num">Collected</th><th class="num">Balance</th></tr></thead>
+    <tbody>
+    ${customers.map(c=>{ const t=customerTotals(c); return `<tr>
+      <td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.type)}</td>
+      <td class="num">${fmt(t.billed)}</td><td class="num">${fmt(t.paid)}</td>
+      <td class="num" style="color:${t.balance>0?'var(--danger)':'var(--growth)'}">${fmt(t.balance)}</td>
+    </tr>`; }).join('')}
+    <tr><td><b>Total</b></td><td></td><td class="num"><b>${fmt(waterTotals.billed)}</b></td><td class="num"><b>${fmt(waterTotals.paid)}</b></td><td class="num"><b>${fmt(waterTotals.balance)}</b></td></tr>
+    </tbody></table>` : `<div class="empty">No water customers logged yet.</div>`;
+
+  document.getElementById('insightsList').innerHTML = buildInsights(filtered, waterTotals).map(i=>`<div class="insight ${i.type}">${i.text}</div>`).join('') || `<div class="empty">Log a few harvests and water bills to start seeing suggestions here.</div>`;
+}
+
+function buildInsights(filtered, waterTotals){
+  const insights = [];
+  const harvested = filtered.filter(b=>batchStatus(b)==='harvested');
+
+  // cost per kg comparison, by crop type
+  const byCrop = {};
+  harvested.forEach(b=>{
+    const kg = Number(b.stages.harvest.yieldKg||0);
+    if(kg<=0) return;
+    const cpk = batchCost(b)/kg;
+    (byCrop[b.cropType] = byCrop[b.cropType]||[]).push({b, cpk});
+  });
+  Object.keys(byCrop).forEach(crop=>{
+    const arr = byCrop[crop];
+    if(arr.length<2) return;
+    const avg = arr.reduce((s,x)=>s+x.cpk,0)/arr.length;
+    arr.forEach(x=>{
+      if(x.cpk > avg*1.15){
+        insights.push({type:'warn', text:`One ${escapeHtml(crop)} batch cost ${fmt(x.cpk)}/kg to produce — about ${Math.round((x.cpk/avg-1)*100)}% above your average of ${fmt(avg)}/kg. Check its highest cost category before the next planting.`});
+      }
+    });
+  });
+
+  // highest spend category overall
+  const catTotals = {};
+  filtered.forEach(b=>(b.costs||[]).forEach(c=>{ catTotals[c.category]=(catTotals[c.category]||0)+Number(c.amount||0); }));
+  const topCat = Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
+  if(topCat){
+    insights.push({type:'info', text:`${escapeHtml(topCat[0])} is your biggest cost driver at ${fmt(topCat[1])} across these batches. Small efficiency gains here matter more than in any other category.`});
+  }
+
+  // loss-making batches
+  const losses = filtered.filter(b=>batchStatus(b)==='harvested' && batchProfit(b)<0);
+  if(losses.length){
+    insights.push({type:'warn', text:`${losses.length} harvested batch${losses.length>1?'es':''} closed at a loss. Review their cost ledgers and field notes together to spot what to change next season.`});
+  }
+
+  // no observations logged
+  const noObs = filtered.filter(b=>!(b.observations&&b.observations.length) && batchStatus(b)==='active');
+  if(noObs.length){
+    insights.push({type:'info', text:`${noObs.length} active batch${noObs.length>1?'es have':' has'} no field notes yet. A quick note when you spot pests, weather stress or irrigation issues makes next season's decisions much easier.`});
+  }
+
+  // water collections
+  if(waterTotals.billed>0 && waterTotals.balance > waterTotals.billed*0.3){
+    insights.push({type:'warn', text:`${fmt(waterTotals.balance)} in water bills is still unpaid — over 30% of everything billed. Sending monthly bills promptly (see the Water Customers tab) can help close this gap.`});
+  } else if(waterTotals.billed>0){
+    insights.push({type:'good', text:`Water bill collection is healthy — ${fmt(waterTotals.paid)} of ${fmt(waterTotals.billed)} billed has been collected.`});
+  }
+
+  if(harvested.length===0){
+    insights.push({type:'info', text:`No batches marked as harvested yet in this view — profit and loss will fill in as harvests are recorded.`});
+  }
+
+  return insights;
+}
+
+/* ---------------- Modal plumbing ---------------- */
+function openModal(){ document.getElementById('overlay').classList.add('open'); }
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+
+init();
+</script>
+</body>
+</html>
