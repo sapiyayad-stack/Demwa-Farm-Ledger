@@ -251,13 +251,12 @@
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:20px;">Sign in to sync your farm records across devices.</div>
     <div class="field"><label>Email</label><input id="auth-email" type="email" placeholder="you@example.com"></div>
     <div class="field"><label>Password</label><input id="auth-password" type="password" placeholder="At least 6 characters"></div>
-    <div class="field"><label>Farm code — only for Sign up</label><input id="auth-farmcode" placeholder="Leave blank to start a new farm, or enter a teammate's code to join theirs"></div>
     <div id="authError" style="color:var(--danger); font-size:12.5px; margin-bottom:8px; display:none;"></div>
     <div style="display:flex; gap:10px; margin-top:12px;">
       <button class="btn" style="flex:1; text-align:center;" onclick="doLogin()">Log in</button>
       <button class="btn secondary" style="flex:1; text-align:center;" onclick="doSignup()">Sign up</button>
     </div>
-    <div style="font-size:11.5px; color:var(--ink-soft); margin-top:14px;">First time on this farm? Leave the farm code blank and "Sign up" — you'll get a code to share with your team. Already have a code? Enter it and "Sign up" to join. Returning? Just "Log in" — no code needed.</div>
+    <div style="font-size:11.5px; color:var(--ink-soft); margin-top:14px;">Sign up only works if the farm owner has already invited your exact email address. Already invited? Enter that same email and choose a password. Returning? Just "Log in".</div>
   </div>
 </div>
 
@@ -273,10 +272,11 @@
       <button data-tab="water"><span class="dot"></span>Water Customers</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
     </div>
+    <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
     <div class="sidebar-foot">
       <div id="userEmailLabel" style="margin-bottom:4px; word-break:break-all;"></div>
       <div id="roleLabel" style="font-size:10.5px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;"></div>
-      <div style="font-size:11px; color:#8A7C64; margin-bottom:4px;">Farm code: <span id="farmCodeLabel" class="mono" style="color:var(--gold);"></span> <button class="icon-btn" style="color:#D9CFBC; padding:0 0 0 4px;" onclick="copyFarmCode()">copy</button></div>
+      <div style="font-size:11px; color:#8A7C64; margin-bottom:4px;">Farm ID: <span id="farmCodeLabel" class="mono" style="color:var(--gold);"></span></div>
       <button class="icon-btn" style="color:#D9CFBC; padding:0;" onclick="doLogout()">Log out</button>
     </div>
   </div>
@@ -421,19 +421,27 @@ function genFarmCode(){
 async function doSignup(){
   authErr('');
   const email = document.getElementById('auth-email').value.trim();
+  const emailKey = email.toLowerCase();
   const pass = document.getElementById('auth-password').value;
-  const enteredCode = document.getElementById('auth-farmcode').value.trim().toUpperCase();
   if(!email || pass.length<6){ authErr('Enter an email and a password of at least 6 characters.'); return; }
+  let cred;
   try{
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    const farmId = enteredCode || genFarmCode();
-    const role = enteredCode ? 'viewer' : 'owner';
-    await db.collection('users').doc(cred.user.uid).set({email, farmId, role});
-    if(!enteredCode){
-      // brand new farm — show the code once, prominently, before the app loads
-      setTimeout(()=>alert(`Your new farm code is: ${farmId}\n\nShare this with anyone who should be able to log in and view records — they enter it in the "Farm code" box when they Sign up. They'll be able to view everything but not edit it. Keep a copy of this code somewhere safe.`), 300);
+    cred = await auth.createUserWithEmailAndPassword(email, pass);
+  } catch(e){ authErr(e.message); return; }
+  try{
+    const inviteSnap = await db.collection('invites').doc(emailKey).get();
+    if(!inviteSnap.exists){
+      authErr('This email has not been invited by a farm owner yet. Ask them to add you first.');
+      await cred.user.delete();
+      return;
     }
-  } catch(e){ authErr(e.message); }
+    const inv = inviteSnap.data();
+    await db.collection('users').doc(cred.user.uid).set({email, farmId: inv.farmId, role: inv.role || 'viewer'});
+    db.collection('invites').doc(emailKey).delete().catch(()=>{});
+  } catch(e){
+    authErr('Could not complete sign up: ' + e.message);
+    try{ await cred.user.delete(); } catch(e2){}
+  }
 }
 async function doLogin(){
   authErr('');
@@ -446,12 +454,37 @@ async function doLogin(){
 async function doLogout(){
   await auth.signOut();
 }
-async function copyFarmCode(){
-  if(!currentFarmId) return;
-  const text = currentFarmId;
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(()=>showToast('Farm code copied')).catch(()=>fallbackCopy(text));
-  } else fallbackCopy(text);
+
+/* ---------------- Invite a teammate (owner only) ---------------- */
+function openInviteModal(){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Invite a teammate</h3>
+    <div class="field"><label>Their email</label><input id="inv-email" type="email" placeholder="worker@example.com"></div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">They'll be able to log in and view every record, but not add, edit, or delete anything. Send them the site link separately — they'll sign up with this exact email.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="sendInvite()">Send invite</button>
+    </div>
+  `;
+  openModal();
+}
+async function sendInvite(){
+  if(!requireOwner()) return;
+  const email = document.getElementById('inv-email').value.trim();
+  if(!email || !email.includes('@')){ showToast('Enter a valid email'); return; }
+  try{
+    await db.collection('invites').doc(email.toLowerCase()).set({
+      farmId: currentFarmId, role: 'viewer', invitedBy: currentUid, email: email.toLowerCase()
+    });
+    closeModal();
+    showToast(`Invited ${email} — they can now sign up`);
+  } catch(e){
+    console.error(e);
+    showToast('Could not send invite — check your connection');
+  }
 }
 
 auth.onAuthStateChanged(async (user)=>{
@@ -486,6 +519,7 @@ auth.onAuthStateChanged(async (user)=>{
     roleEl.style.color = isOwner() ? 'var(--growth-wash)' : '#E0B84A';
     document.getElementById('btnNewBatch').style.display = isOwner() ? '' : 'none';
     document.getElementById('btnNewCustomer').style.display = isOwner() ? '' : 'none';
+    document.getElementById('btnInvite').style.display = isOwner() ? '' : 'none';
     await loadFarmData();
     renderAll();
   } else {
