@@ -409,6 +409,18 @@ function requireOwner(){
   if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return false; }
   return true;
 }
+async function withRetry(fn, attempts=4, delayMs=600){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{ return await fn(); }
+    catch(e){
+      lastErr = e;
+      if(e.code !== 'permission-denied' || i === attempts-1) throw e;
+      await new Promise(r=>setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
 
 /* ---------------- Auth screen wiring ---------------- */
 function authErr(msg){
@@ -431,20 +443,21 @@ async function doSignup(){
   let cred;
   try{
     cred = await auth.createUserWithEmailAndPassword(email, pass);
+    await cred.user.getIdToken(true); // force a fresh token so Firestore rules see the new account immediately
   } catch(e){ authErr(e.message); return; }
   try{
-    const inviteSnap = await db.collection('invites').doc(emailKey).get();
+    const inviteSnap = await withRetry(()=>db.collection('invites').doc(emailKey).get());
     if(inviteSnap.exists){
       // joining an existing farm they were invited to
       const inv = inviteSnap.data();
-      await db.collection('users').doc(cred.user.uid).set({email, farmId: inv.farmId, role: inv.role || 'viewer'});
+      await withRetry(()=>db.collection('users').doc(cred.user.uid).set({email, farmId: inv.farmId, role: inv.role || 'viewer'}));
       db.collection('invites').doc(emailKey).delete().catch(()=>{});
     } else {
       // no invite found — start a brand new, independent farm, owned by this account
       const farmId = genFarmCode();
       const farmName = farmNameInput || 'My Farm';
-      await db.collection('users').doc(cred.user.uid).set({email, farmId, role:'owner', farmName});
-      await db.collection('farms').doc(farmId).set({batches:[], customers:[], farmName});
+      await withRetry(()=>db.collection('users').doc(cred.user.uid).set({email, farmId, role:'owner', farmName}));
+      await withRetry(()=>db.collection('farms').doc(farmId).set({batches:[], customers:[], farmName}));
     }
   } catch(e){
     authErr('Could not complete sign up: ' + e.message);
