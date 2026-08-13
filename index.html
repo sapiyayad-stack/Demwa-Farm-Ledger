@@ -227,6 +227,16 @@
     font-size:12px; white-space:pre-wrap; margin-top:8px; line-height:1.6;
   }
 
+  .star-row{display:flex; gap:4px; margin:6px 0 12px;}
+  .star-row button{all:unset; cursor:pointer; font-size:24px; line-height:1; color:var(--line);}
+  .star-row button.filled{color:var(--gold);}
+  .review-card{border-bottom:1px solid var(--line); padding:12px 0;}
+  .review-card:last-child{border-bottom:none;}
+  .review-card .stars{color:var(--gold); font-size:14px; letter-spacing:1px;}
+  .review-card .who{font-weight:600; font-size:13px; margin-top:2px;}
+  .review-card .farm{font-size:11px; color:var(--ink-soft);}
+  .review-card .comment{font-size:13px; margin-top:6px; line-height:1.5;}
+
   @media (max-width:900px){
     .app{flex-direction:column;}
     .sidebar{width:100%; height:auto; position:relative; flex-direction:row; overflow-x:auto; align-items:center;}
@@ -258,6 +268,10 @@
       <button class="btn secondary" style="flex:1; text-align:center;" onclick="doSignup()">Sign up</button>
     </div>
     <div style="font-size:11.5px; color:var(--ink-soft); margin-top:14px;">Starting your own farm? Give it a name above and "Sign up" — you'll become its owner. Invited to someone else's farm? Sign up with the exact email they invited — the farm name field is ignored. Returning? Just "Log in".</div>
+    <div style="display:flex; gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line);">
+      <button class="icon-btn" style="color:var(--gold); padding:0;" onclick="openReviewsModal()">★ See reviews</button>
+      <button class="icon-btn" style="color:var(--water); padding:0;" onclick="openSupportModal()">Need help? Contact support</button>
+    </div>
   </div>
 </div>
 
@@ -274,6 +288,10 @@
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
     </div>
     <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
+    <div style="display:flex; gap:12px; margin-top:10px; padding:0 2px;">
+      <button class="icon-btn" style="color:#D9CFBC; padding:0; font-size:12px;" onclick="openReviewsModal()">★ Reviews</button>
+      <button class="icon-btn" style="color:#D9CFBC; padding:0; font-size:12px;" onclick="openSupportModal()">Need help?</button>
+    </div>
     <div class="sidebar-foot">
       <div id="userEmailLabel" style="margin-bottom:4px; word-break:break-all;"></div>
       <div id="roleLabel" style="font-size:10.5px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;"></div>
@@ -1385,6 +1403,114 @@ function buildInsights(filtered, waterTotals){
   }
 
   return insights;
+}
+
+/* ---------------- Public reviews ---------------- */
+let reviewRating = 0;
+function openReviewsModal(){
+  const box = document.getElementById('modalBox');
+  const loggedIn = !!currentUid;
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>What farmers are saying</h3>
+    ${loggedIn ? `
+      <div style="background:var(--bg-alt); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:4px;">Leave a review</div>
+        <div class="field"><label>Your name</label><input id="rev-name" placeholder="e.g. Wanjiru"></div>
+        <div class="field"><label>Rating</label>
+          <div class="star-row" id="starRow">
+            ${[1,2,3,4,5].map(n=>`<button type="button" onclick="selectStars(${n})" id="star-${n}">★</button>`).join('')}
+          </div>
+        </div>
+        <div class="field"><label>Comment</label><textarea id="rev-comment" placeholder="How has it helped your farm?"></textarea></div>
+        <button class="btn small" onclick="submitReview()">Post review</button>
+      </div>
+    ` : `<div class="empty" style="padding:14px; margin-bottom:14px;">Log in to leave your own review — anyone can read what's posted here.</div>`}
+    <div id="reviewsList"><div class="empty">Loading reviews…</div></div>
+  `;
+  reviewRating = 0;
+  openModal();
+  loadReviews();
+}
+function selectStars(n){
+  reviewRating = n;
+  for(let i=1;i<=5;i++){
+    document.getElementById('star-'+i).classList.toggle('filled', i<=n);
+  }
+}
+async function loadReviews(){
+  const el = document.getElementById('reviewsList');
+  try{
+    const snap = await db.collection('reviews').orderBy('createdAt','desc').limit(50).get();
+    if(snap.empty){ el.innerHTML = `<div class="empty">No reviews yet — be the first to share how this has helped your farm.</div>`; return; }
+    el.innerHTML = snap.docs.map(d=>{
+      const r = d.data();
+      const stars = '★'.repeat(Math.max(1,Math.min(5,r.rating||0))) + '☆'.repeat(5-Math.max(1,Math.min(5,r.rating||0)));
+      return `<div class="review-card">
+        <div class="stars">${stars}</div>
+        <div class="who">${escapeHtml(r.name||'A farmer')}</div>
+        <div class="farm">${escapeHtml(r.farmName||'')}</div>
+        <div class="comment">${escapeHtml(r.comment||'')}</div>
+      </div>`;
+    }).join('');
+  } catch(e){
+    console.error(e);
+    el.innerHTML = `<div class="empty">Couldn't load reviews right now — check your connection and try again.</div>`;
+  }
+}
+async function submitReview(){
+  const name = document.getElementById('rev-name').value.trim();
+  const comment = document.getElementById('rev-comment').value.trim();
+  if(!name){ showToast('Enter your name'); return; }
+  if(reviewRating < 1){ showToast('Pick a star rating'); return; }
+  if(!comment){ showToast('Write a short comment'); return; }
+  try{
+    await db.collection('reviews').add({
+      name, farmName: currentFarmName || '', rating: reviewRating, comment,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Thanks — your review is live');
+    closeModal();
+  } catch(e){
+    console.error(e);
+    showToast('Could not post your review — try again');
+  }
+}
+
+/* ---------------- Contact support ---------------- */
+function openSupportModal(){
+  const box = document.getElementById('modalBox');
+  const prefillEmail = auth.currentUser ? auth.currentUser.email : '';
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Contact support</h3>
+    <div class="field"><label>Your name</label><input id="sup-name" placeholder="e.g. Wanjiru"></div>
+    <div class="field"><label>Your email</label><input id="sup-email" type="email" value="${escapeHtml(prefillEmail)}" placeholder="you@example.com"></div>
+    <div class="field"><label>What's going on?</label><textarea id="sup-message" placeholder="Describe the issue or question in a few sentences"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn water" onclick="submitSupportMessage()">Send</button>
+    </div>
+  `;
+  openModal();
+}
+async function submitSupportMessage(){
+  const name = document.getElementById('sup-name').value.trim();
+  const email = document.getElementById('sup-email').value.trim();
+  const message = document.getElementById('sup-message').value.trim();
+  if(!name || !email || !message){ showToast('Fill in all fields'); return; }
+  try{
+    await db.collection('support_messages').add({
+      name, email, message,
+      farmId: currentFarmId || null, farmName: currentFarmName || null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Sent — thanks, we\'ll get back to you');
+    closeModal();
+  } catch(e){
+    console.error(e);
+    showToast('Could not send — check your connection and try again');
+  }
 }
 
 /* ---------------- Modal plumbing ---------------- */
