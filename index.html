@@ -444,23 +444,27 @@ async function doSignup(){
   try{
     cred = await auth.createUserWithEmailAndPassword(email, pass);
     await cred.user.getIdToken(true); // force a fresh token so Firestore rules see the new account immediately
-  } catch(e){ authErr(e.message); return; }
+  } catch(e){ authErr('[Step: create account] ' + (e.code||'') + ' ' + e.message); return; }
+  let step = 'checking invite';
   try{
     const inviteSnap = await withRetry(()=>db.collection('invites').doc(emailKey).get());
     if(inviteSnap.exists){
       // joining an existing farm they were invited to
       const inv = inviteSnap.data();
+      step = 'writing user record (join)';
       await withRetry(()=>db.collection('users').doc(cred.user.uid).set({email, farmId: inv.farmId, role: inv.role || 'viewer'}));
       db.collection('invites').doc(emailKey).delete().catch(()=>{});
     } else {
       // no invite found — start a brand new, independent farm, owned by this account
       const farmId = genFarmCode();
       const farmName = farmNameInput || 'My Farm';
+      step = 'writing user record (new farm)';
       await withRetry(()=>db.collection('users').doc(cred.user.uid).set({email, farmId, role:'owner', farmName}));
+      step = 'writing farm record';
       await withRetry(()=>db.collection('farms').doc(farmId).set({batches:[], customers:[], farmName}));
     }
   } catch(e){
-    authErr('Could not complete sign up: ' + e.message);
+    authErr(`[Step: ${step}] ${e.code||''} ${e.message}`);
     try{ await cred.user.delete(); } catch(e2){}
   }
 }
