@@ -252,6 +252,14 @@
   .crop-card .row{display:flex; justify-content:space-between; font-size:12.5px; margin-top:4px;}
   .crop-card .row b{font-family:'IBM Plex Mono'; font-weight:500;}
 
+  .guide-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:12px; overflow:hidden;}
+  .guide-head{padding:14px 16px; display:flex; justify-content:space-between; align-items:flex-start; cursor:pointer;}
+  .guide-title{font-family:'Fraunces',serif; font-weight:600; font-size:16px;}
+  .guide-crop{display:inline-block; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; padding:2px 8px; border-radius:20px; background:var(--growth-wash); color:var(--growth); margin-bottom:4px;}
+  .guide-summary{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
+  .guide-body{padding:0 16px 16px; border-top:1px solid var(--line); display:none; font-size:13.5px; line-height:1.7; white-space:pre-wrap;}
+  .guide-body.open{display:block; padding-top:14px;}
+
   @media (max-width:900px){
     .app{flex-direction:column;}
     .sidebar{width:100%; height:auto; position:relative; flex-direction:row; overflow-x:auto; align-items:center;}
@@ -283,7 +291,8 @@
       <button class="btn secondary" style="flex:1; text-align:center;" onclick="doSignup()">Sign up</button>
     </div>
     <div style="font-size:11.5px; color:var(--ink-soft); margin-top:14px;">Starting your own farm? Give it a name above and "Sign up" — you'll become its owner. Invited to someone else's farm? Sign up with the exact email they invited — the farm name field is ignored. Returning? Just "Log in".</div>
-    <div style="display:flex; gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line);">
+    <div style="display:flex; gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); flex-wrap:wrap;">
+      <button class="icon-btn" style="color:var(--growth); padding:0;" onclick="openGuidesModal()">📖 Planting guides</button>
       <button class="icon-btn" style="color:var(--gold); padding:0;" onclick="openReviewsModal()">★ See reviews</button>
       <button class="icon-btn" style="color:var(--water); padding:0;" onclick="openSupportModal()">Need help? Contact support</button>
     </div>
@@ -301,6 +310,7 @@
       <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
       <button data-tab="water"><span class="dot"></span>Water Customers</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
+      <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
     <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
     <div style="display:flex; gap:12px; margin-top:10px; padding:0 2px;">
@@ -414,6 +424,18 @@
         <div class="section-head"><h2>Suggested areas to improve next season</h2></div>
         <div id="insightsList"></div>
       </section>
+    </div>
+
+    <!-- GUIDES -->
+    <div id="tab-guides" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Planting guides</h1>
+          <p>A shared reference library — visible to every farmer using Demwa Farm Ledger, including before they sign up.</p>
+        </div>
+        <button class="btn" id="btnNewGuide" style="display:none;" onclick="openGuideModal()">+ New guide</button>
+      </div>
+      <div id="guidesList"><div class="empty">Loading guides…</div></div>
     </div>
 
   </div>
@@ -764,7 +786,9 @@ function goTo(tab){
   document.getElementById('tab-batches').style.display = tab==='batches' ? 'block':'none';
   document.getElementById('tab-water').style.display = tab==='water' ? 'block':'none';
   document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
+  document.getElementById('tab-guides').style.display = tab==='guides' ? 'block':'none';
   if(tab==='reports') renderReports();
+  if(tab==='guides') renderGuidesTab();
 }
 document.getElementById('nav').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-tab]');
@@ -1319,6 +1343,7 @@ function generateMonthlyInvoices(){
   const month = document.getElementById('invoiceMonth').value;
   if(!month){ showToast('Pick a month first'); return; }
   _invoiceTexts = {};
+  _invoicePhones = {};
   const rows = customers.map(c=>{
     const bills = c.bills||[];
     const inMonth = bills.filter(b=>(b.date||'').slice(0,7)===month);
@@ -1348,6 +1373,7 @@ TOTAL DUE:                 ${fmt(r.totalDue)}
 Rate: ${fmt(r.c.ratePerUnit)} per ${r.c.unitLabel}
 Please settle at your earliest convenience. Thank you for your custom.`;
     _invoiceTexts[r.c.id] = text;
+    _invoicePhones[r.c.id] = r.c.phone || '';
     return `
     <div class="invoice-card">
       <div class="cust-head">
@@ -1358,11 +1384,33 @@ Please settle at your earliest convenience. Thank you for your custom.`;
         <div class="balance ${r.totalDue>0?'due':'clear'}">${fmt(r.totalDue)}</div>
       </div>
       <pre class="invoice-pre">${escapeHtml(text)}</pre>
-      <div style="margin-top:8px; text-align:right;">
+      <div style="margin-top:8px; text-align:right; display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn secondary small" onclick="copyInvoice('${r.c.id}')">Copy bill text</button>
+        <button class="btn water small" onclick="sendInvoiceToWhatsApp('${r.c.id}')">Send via WhatsApp</button>
       </div>
     </div>`;
   }).join('');
+}
+let _invoicePhones = {};
+function normalizePhoneForWhatsApp(raw){
+  if(!raw) return '';
+  let digits = String(raw).replace(/\D/g,''); // strip spaces, dashes, +, brackets etc.
+  if(!digits) return '';
+  if(digits.startsWith('0') && digits.length===10){
+    // Local Kenyan format e.g. 0712345678 -> 254712345678
+    digits = '254' + digits.slice(1);
+  }
+  return digits;
+}
+function sendInvoiceToWhatsApp(custId){
+  const text = _invoiceTexts[custId];
+  if(!text) return;
+  const phone = normalizePhoneForWhatsApp(_invoicePhones[custId]);
+  const url = phone
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  if(!phone) showToast('No phone number on file — pick the contact in WhatsApp manually');
+  window.open(url, '_blank');
 }
 function copyInvoice(custId){
   const text = _invoiceTexts[custId];
@@ -1503,6 +1551,122 @@ function buildInsights(filtered, waterTotals){
   }
 
   return insights;
+}
+
+/* ---------------- Planting guides (public read, admin-only write) ---------------- */
+// Only these accounts can create/edit/delete guides — everyone else, including
+// every other farm's owner, gets read-only access. Add more emails here later
+// if you want to bring on co-editors.
+const SITE_ADMIN_EMAILS = ['sapiyayad@gmail.com'];
+function isSiteAdmin(){
+  return !!(auth.currentUser && auth.currentUser.email && SITE_ADMIN_EMAILS.includes(auth.currentUser.email.toLowerCase()));
+}
+
+let _guidesCache = [];
+async function fetchGuides(){
+  const snap = await db.collection('guides').orderBy('cropType').get();
+  _guidesCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  return _guidesCache;
+}
+function renderGuidesInto(containerId, adminControls){
+  const el = document.getElementById(containerId);
+  if(!_guidesCache.length){ el.innerHTML = `<div class="empty">No planting guides posted yet.</div>`; return; }
+  el.innerHTML = _guidesCache.map(g=>`
+    <div class="guide-card">
+      <div class="guide-head" onclick="toggleGuide('${g.id}', '${containerId}')">
+        <div>
+          <div class="guide-crop">${escapeHtml(g.cropType||'General')}</div>
+          <div class="guide-title">${escapeHtml(g.title||'Untitled guide')}</div>
+          <div class="guide-summary">${escapeHtml(g.summary||'')}</div>
+        </div>
+      </div>
+      <div class="guide-body" id="guidebody-${containerId}-${g.id}">${escapeHtml(g.body||'')}
+        ${adminControls && isSiteAdmin() ? `
+          <div style="margin-top:14px; text-align:right;">
+            <button class="icon-btn" onclick="event.stopPropagation(); openGuideModal('${g.id}')">Edit</button>
+            <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deleteGuide('${g.id}')">Delete</button>
+          </div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+function toggleGuide(id, containerId){
+  const body = document.getElementById(`guidebody-${containerId}-${id}`);
+  body.classList.toggle('open');
+}
+async function renderGuidesTab(){
+  document.getElementById('btnNewGuide').style.display = isSiteAdmin() ? '' : 'none';
+  const el = document.getElementById('guidesList');
+  el.innerHTML = `<div class="empty">Loading guides…</div>`;
+  try{ await fetchGuides(); renderGuidesInto('guidesList', true); }
+  catch(e){ console.error(e); el.innerHTML = `<div class="empty">Couldn't load guides — check your connection.</div>`; }
+}
+function openGuidesModal(){
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Planting guides</h3>
+    <div id="guidesModalList"><div class="empty">Loading guides…</div></div>
+  `;
+  openModal();
+  fetchGuides().then(()=>renderGuidesInto('guidesModalList', false))
+    .catch(e=>{ console.error(e); document.getElementById('guidesModalList').innerHTML = `<div class="empty">Couldn't load guides — check your connection.</div>`; });
+}
+
+function openGuideModal(guideId){
+  if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
+  const existing = guideId ? _guidesCache.find(g=>g.id===guideId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing ? 'Edit guide' : 'New planting guide'}</h3>
+    <div class="field-row">
+      <div class="field"><label>Crop</label><input id="g-crop" value="${escapeHtml(existing?.cropType||'')}" placeholder="e.g. Onion"></div>
+      <div class="field"><label>Title</label><input id="g-title" value="${escapeHtml(existing?.title||'')}" placeholder="e.g. Onion planting basics"></div>
+    </div>
+    <div class="field"><label>Short summary</label><input id="g-summary" value="${escapeHtml(existing?.summary||'')}" placeholder="One line shown in the list"></div>
+    <div class="field"><label>Full guide</label><textarea id="g-body" style="min-height:180px;" placeholder="Write the full guide here...">${escapeHtml(existing?.body||'')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveGuide(${existing ? `'${guideId}'` : 'null'})">${existing ? 'Save changes' : 'Publish guide'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveGuide(guideId){
+  if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
+  const cropType = document.getElementById('g-crop').value.trim();
+  const title = document.getElementById('g-title').value.trim();
+  const summary = document.getElementById('g-summary').value.trim();
+  const body = document.getElementById('g-body').value.trim();
+  if(!cropType || !title || !body){ showToast('Fill in crop, title, and the guide text'); return; }
+  try{
+    const data = {cropType, title, summary, body, updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+    if(guideId){
+      await db.collection('guides').doc(guideId).update(data);
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('guides').add(data);
+    }
+    closeModal();
+    showToast('Guide saved');
+    renderGuidesTab();
+  } catch(e){
+    console.error(e);
+    showToast('Could not save — check your connection');
+  }
+}
+async function deleteGuide(guideId){
+  if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
+  if(!confirm('Delete this guide? This cannot be undone.')) return;
+  try{
+    await db.collection('guides').doc(guideId).delete();
+    showToast('Guide deleted');
+    renderGuidesTab();
+  } catch(e){
+    console.error(e);
+    showToast('Could not delete — check your connection');
+  }
 }
 
 /* ---------------- Public reviews ---------------- */
