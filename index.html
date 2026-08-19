@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Demwa Farm Ledger — Farm Management</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#8C2F39">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Demwa Ledger">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -237,6 +245,13 @@
   .review-card .farm{font-size:11px; color:var(--ink-soft);}
   .review-card .comment{font-size:13px; margin-top:6px; line-height:1.5;}
 
+  .crop-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px;}
+  .crop-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; border-left:3px solid var(--onion);}
+  .crop-card .crop-name{font-family:'Fraunces',serif; font-weight:600; font-size:15px;}
+  .crop-card .crop-count{font-size:11px; color:var(--ink-soft); margin-bottom:8px;}
+  .crop-card .row{display:flex; justify-content:space-between; font-size:12.5px; margin-top:4px;}
+  .crop-card .row b{font-family:'IBM Plex Mono'; font-weight:500;}
+
   @media (max-width:900px){
     .app{flex-direction:column;}
     .sidebar{width:100%; height:auto; position:relative; flex-direction:row; overflow-x:auto; align-items:center;}
@@ -279,7 +294,7 @@
   <div class="sidebar">
     <div class="brand">
       <div class="mark">🧅 Demwa Farm Ledger</div>
-      <div class="sub">Onion &amp; Water Records</div>
+      <div class="sub">Crop &amp; Water Records</div>
     </div>
     <div class="nav" id="nav">
       <button data-tab="dashboard" class="active"><span class="dot"></span>Dashboard</button>
@@ -312,6 +327,11 @@
         </div>
       </div>
       <div class="cards" id="dashCards"></div>
+
+      <section>
+        <div class="section-head"><h2>Costs by crop</h2></div>
+        <div id="dashCropBreakdown"></div>
+      </section>
 
       <section>
         <div class="section-head"><h2>Active crop batches</h2></div>
@@ -369,9 +389,14 @@
           <h1>Profit &amp; loss</h1>
           <p>Each batch — from seed purchase to harvest and sale — is its own season. Compare them here alongside water income.</p>
         </div>
-        <select id="seasonFilter" onchange="renderReports()" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-family:'Work Sans'; font-size:13px;">
-          <option value="all">All seasons</option>
-        </select>
+        <div style="display:flex; gap:8px;">
+          <select id="cropFilter" onchange="renderReports()" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-family:'Work Sans'; font-size:13px;">
+            <option value="all">All crops</option>
+          </select>
+          <select id="seasonFilter" onchange="renderReports()" style="padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-family:'Work Sans'; font-size:13px;">
+            <option value="all">All seasons</option>
+          </select>
+        </div>
       </div>
       <div class="cards" id="reportCards"></div>
 
@@ -619,7 +644,7 @@ const STAGE_DEFS = [
   {key:'growth', label:'Growth &\nMaintenance'},
   {key:'harvest', label:'Harvest'}
 ];
-const COST_CATS = ['Seeds','Nursery Inputs','Labour','Fertilizer','Pesticide/Fungicide','Water & Solar Maintenance','Transport','Other'];
+const COST_CATS = ['Seeds','Nursery Inputs','Labour','Fertilizer','Foliar Feeding','Pesticide/Fungicide','Water & Solar Maintenance','Transport','Other'];
 const CURRENCY = 'KES';
 
 function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
@@ -685,6 +710,34 @@ function renderDashboard(){
     <div class="card water"><div class="label">Water balance outstanding</div><div class="value">${fmt(waterTotals.balance)}</div></div>
   `;
 
+  // Group every batch by crop type so costs for onions, maize, tomatoes, etc.
+  // are never blended into one indistinguishable number.
+  const byCrop = {};
+  batches.forEach(b=>{
+    const key = (b.cropType||'Other').trim() || 'Other';
+    if(!byCrop[key]) byCrop[key] = {count:0, cost:0, revenue:0, active:0};
+    byCrop[key].count += 1;
+    byCrop[key].cost += batchCost(b);
+    byCrop[key].revenue += batchRevenue(b);
+    if(batchStatus(b)==='active') byCrop[key].active += 1;
+  });
+  const cropKeys = Object.keys(byCrop).sort((a,b)=>byCrop[b].cost-byCrop[a].cost);
+  document.getElementById('dashCropBreakdown').innerHTML = cropKeys.length ? `
+    <div class="crop-grid">
+      ${cropKeys.map(name=>{
+        const c = byCrop[name];
+        const profit = c.revenue - c.cost;
+        return `<div class="crop-card">
+          <div class="crop-name">${escapeHtml(name)}</div>
+          <div class="crop-count">${c.count} batch${c.count!==1?'es':''} · ${c.active} active</div>
+          <div class="row"><span>Cost</span><b>${fmt(c.cost)}</b></div>
+          <div class="row"><span>Revenue</span><b>${fmt(c.revenue)}</b></div>
+          <div class="row"><span>Profit</span><b style="color:${profit>=0?'var(--growth)':'var(--danger)'}">${fmt(profit)}</b></div>
+        </div>`;
+      }).join('')}
+    </div>
+  ` : `<div class="empty">No crop batches yet — costs will split out by crop here once you add some.</div>`;
+
   const ab = activeBatches.slice(0,4);
   document.getElementById('dashBatches').innerHTML = ab.length ? ab.map(b=>`
     <div class="batch" style="margin-bottom:10px;">
@@ -737,7 +790,7 @@ function blankBatch(){
   };
 }
 
-const STAGE_TIPS = {
+const ONION_STAGE_TIPS = {
   seedling: [
     'Buy certified, disease-free seed from a reputable stockist and keep the receipt for your cost record.',
     'Check seed germination rate before large purchases — a quick paper-towel test saves a wasted nursery.',
@@ -768,9 +821,47 @@ const STAGE_TIPS = {
   ]
 };
 
+// Generic tips for any crop that isn't onion — deliberately agronomy-agnostic,
+// since a maize or tomato farmer shouldn't get onion-curing advice.
+const GENERIC_STAGE_TIPS = {
+  seedling: [
+    'Buy certified seed where possible and keep the receipt for your cost record.',
+    'Check germination rate on a small sample before committing to a full planting.',
+    'Match the variety to your local climate, market, and the length of the growing season.'
+  ],
+  nursery: [
+    'Use well-draining, disease-free soil or growing medium to reduce seedling losses.',
+    'Water consistently — nursery stock dries out and stresses faster than an established crop.',
+    'Thin crowded seedlings early so the remaining ones grow stronger and more uniform.',
+    'Harden off seedlings gradually (less shade, less water) for a few days before transplanting.'
+  ],
+  transplant: [
+    'Transplant in cool conditions — early morning, evening, or an overcast day — to reduce shock.',
+    'Space plants according to the variety\'s mature size; overcrowding is a common yield-limiter.',
+    'Check your irrigation layout matches the new row spacing before you finish planting.'
+  ],
+  growth: [
+    'Split fertilizer applications to match the crop\'s uptake instead of one heavy dose.',
+    'Scout for pests and disease on a regular schedule; early treatment is cheaper than a late rescue.',
+    'Keep irrigation equipment clear of clogs, especially if your water source carries sediment.',
+    'Log every input as a cost entry as you apply it — much harder to reconstruct later.'
+  ],
+  harvest: [
+    'Time the harvest to the crop\'s maturity signs rather than the calendar alone.',
+    'Handle and store the harvest in a way appropriate to the crop to reduce post-harvest loss.',
+    'Record yield and sale price promptly — this is what makes next season\'s profit and loss meaningful.',
+    'Compare this batch\'s cost per kg against past batches of the same crop on the Profit & Loss page.'
+  ]
+};
+
+function getStageTips(cropType, stageKey){
+  const isOnion = (cropType||'').trim().toLowerCase().includes('onion');
+  return (isOnion ? ONION_STAGE_TIPS : GENERIC_STAGE_TIPS)[stageKey] || [];
+}
+
 function renderBatches(){
   const el = document.getElementById('batchList');
-  if(!batches.length){ el.innerHTML = `<div class="empty">No crop batches yet. Click <b>+ New batch</b> to log your first onion planting — or any other crop grown on the farm.</div>`; return; }
+  if(!batches.length){ el.innerHTML = `<div class="empty">No crop batches yet. Click <b>+ New batch</b> to log your first planting — onions or any other crop grown on the farm.</div>`; return; }
 
   el.innerHTML = batches.slice().reverse().map(b=>{
     const cost = batchCost(b), revenue = batchRevenue(b), profit = batchProfit(b);
@@ -944,7 +1035,7 @@ function openStageModal(batchId, stageKey){
   } else {
     fields = `<div class="field"><label>Date</label><input id="s-date" type="date" value="${st.date||''}"></div>`;
   }
-  const tips = STAGE_TIPS[stageKey] || [];
+  const tips = getStageTips(b.cropType, stageKey);
   box.innerHTML = `
     <button class="close-x" onclick="closeModal()">✕</button>
     <h3>${def.label.replace('\\n',' ')}</h3>
@@ -1295,7 +1386,16 @@ function renderReports(){
   sel.innerHTML = `<option value="all">All seasons</option>` + seasons.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
   sel.value = seasons.includes(current) ? current : 'all';
 
-  const filtered = sel.value==='all' ? batches : batches.filter(b=>b.season===sel.value);
+  const crops = Array.from(new Set(batches.map(b=>(b.cropType||'Other').trim() || 'Other'))).sort();
+  const cropSel = document.getElementById('cropFilter');
+  const currentCrop = cropSel.value || 'all';
+  cropSel.innerHTML = `<option value="all">All crops</option>` + crops.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  cropSel.value = crops.includes(currentCrop) ? currentCrop : 'all';
+
+  let filtered = sel.value==='all' ? batches : batches.filter(b=>b.season===sel.value);
+  if(cropSel.value !== 'all'){
+    filtered = filtered.filter(b=>((b.cropType||'Other').trim() || 'Other') === cropSel.value);
+  }
 
   const cropCost = filtered.reduce((s,b)=>s+batchCost(b),0);
   const cropRevenue = filtered.reduce((s,b)=>s+batchRevenue(b),0);
@@ -1332,7 +1432,7 @@ function renderReports(){
         <td class="num">${margin}</td>
       </tr>`;
     }).join('')}
-    </tbody></table>` : `<div class="empty">No batches in this season yet.</div>`;
+    </tbody></table>` : `<div class="empty">No batches match this filter yet.</div>`;
 
   document.getElementById('reportWaterTable').innerHTML = customers.length ? `
     <table><thead><tr><th>Customer</th><th>Type</th><th class="num">Billed</th><th class="num">Collected</th><th class="num">Balance</th></tr></thead>
@@ -1519,6 +1619,11 @@ function closeModal(){ document.getElementById('overlay').classList.remove('open
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 
 init();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
