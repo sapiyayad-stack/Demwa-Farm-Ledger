@@ -1492,15 +1492,36 @@ async function sendInvoicePdfToWhatsApp(custId){
   }
 
   // Desktop (and any phone where native sharing isn't available): WhatsApp
-  // gives web pages no way to auto-attach a file, so download the PDF and
-  // open a chat with instructions to attach it.
+  // gives web pages no way to auto-attach a file. Download it silently, then
+  // walk the person through the two remaining clicks instead of firing a
+  // download and a new tab at once, which is disorienting.
   doc.save(filename);
-  const note = `Water bill for ${data.c.name} — ${monthLabel(data.month)}, total due ${fmt(data.totalDue)}. PDF downloaded as "${filename}" — please attach it to this chat.`;
+  showDesktopWhatsAppSteps(filename, data, phone);
+}
+
+function showDesktopWhatsAppSteps(filename, data, phone){
+  const note = `Water bill for ${data.c.name} — ${monthLabel(data.month)}, total due ${fmt(data.totalDue)}. PDF attached above ⬆️`;
   const url = phone
     ? `https://wa.me/${phone}?text=${encodeURIComponent(note)}`
     : `https://wa.me/?text=${encodeURIComponent(note)}`;
-  showToast('PDF downloaded — attach it in the WhatsApp chat that just opened');
-  window.open(url, '_blank');
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>PDF downloaded ✓</h3>
+    <div style="background:var(--bg-alt); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:16px; font-family:'IBM Plex Mono'; font-size:12.5px; word-break:break-all;">
+      ${escapeHtml(filename)}
+    </div>
+    <p style="font-size:13px; line-height:1.6; color:var(--ink-soft); margin:0 0 6px;">Two quick steps to finish sending${data.c.name ? ' to ' + escapeHtml(data.c.name) : ''}:</p>
+    <ol style="font-size:13px; line-height:1.9; padding-left:20px; margin:0 0 18px;">
+      <li>Click <b>"Open WhatsApp"</b> below${phone ? ' — the right chat opens automatically' : ' and pick the contact'}.</li>
+      <li>Click the <b>📎 attach icon</b> (or just drag the file in from your Downloads), then hit Send.</li>
+    </ol>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Close</button>
+      <button class="btn water" onclick="window.open('${url}','_blank'); closeModal();">Open WhatsApp →</button>
+    </div>
+  `;
+  openModal();
 }
 
 function copyInvoice(custId){
