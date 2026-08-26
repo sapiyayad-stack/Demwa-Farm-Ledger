@@ -376,7 +376,16 @@
         </div>
         <button class="btn water" id="btnNewCustomer" onclick="openCustomerModal()">+ New customer</button>
       </div>
-      <div class="cards" id="waterCards" style="grid-template-columns:repeat(3,1fr);"></div>
+      <div class="cards" id="waterCards" style="grid-template-columns:repeat(4,1fr);"></div>
+
+      <section>
+        <div class="section-head">
+          <h2>Water business costs</h2>
+          <button class="btn secondary small" id="btnAddWaterCost" onclick="openWaterCostModal()">+ Add cost</button>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Costs of running the water supply itself — solar maintenance, borehole servicing, pipes — kept separate from crop costs, but included in the consolidated farm profit on the Profit &amp; Loss page.</p>
+        <div id="waterCostsList"></div>
+      </section>
 
       <section>
         <div class="section-head">
@@ -639,17 +648,18 @@ async function loadFarmData(){
     const data = snap.exists ? snap.data() : {};
     batches = data.batches || [];
     customers = data.customers || [];
+    waterCosts = data.waterCosts || [];
     currentFarmName = data.farmName || 'My Farm';
   } catch(e){
     console.error('load failed', e);
     showToast('Could not load your data — check your connection');
-    batches = []; customers = [];
+    batches = []; customers = []; waterCosts = [];
   }
 }
 async function saveFarmData(){
   if(!farmDocRef) return;
   if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return; }
-  try{ await farmDocRef.set({batches, customers}, {merge:true}); }
+  try{ await farmDocRef.set({batches, customers, waterCosts}, {merge:true}); }
   catch(e){ console.error('save failed', e); showToast('Could not save — will retry once you\'re back online'); }
 }
 /* storeSet('batches', batches) / storeSet('customers', customers) calls throughout
@@ -659,6 +669,10 @@ async function storeSet(key, value){ await saveFarmData(); }
 
 let batches = [];
 let customers = [];
+let waterCosts = []; // costs specific to running the water supply business itself —
+                      // kept separate from per-batch crop costs, so the two sides
+                      // of the farm stay independently trackable but can still be
+                      // consolidated into one true farm-wide profit figure.
 
 const STAGE_DEFS = [
   {key:'seedling', label:'Seedling\nPurchase'},
@@ -668,7 +682,9 @@ const STAGE_DEFS = [
   {key:'harvest', label:'Harvest'}
 ];
 const COST_CATS = ['Seeds','Nursery Inputs','Labour','Fertilizer','Foliar Feeding','Pesticide/Fungicide','Water & Solar Maintenance','Transport','Other'];
+const WATER_COST_CATS = ['Solar Maintenance','Borehole Servicing','Pipes & Fittings','Labour','Transport','Other'];
 const CURRENCY = 'KES';
+
 
 function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 function fmt(n){ return CURRENCY + ' ' + (Math.round((n||0)*100)/100).toLocaleString(); }
@@ -1168,7 +1184,76 @@ async function deleteObservation(batchId, obsId){
   renderAll();
 }
 
+function waterCostsTotal(){
+  return (waterCosts||[]).reduce((s,c)=>s+Number(c.amount||0),0);
+}
+function renderWaterCostsList(){
+  const el = document.getElementById('waterCostsList');
+  if(!waterCosts.length){ el.innerHTML = `<div class="empty">No water business costs logged yet.</div>`; return; }
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    ${waterCosts.slice().reverse().map(c=>`
+      <tr>
+        <td>${c.date||''}</td>
+        <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
+        <td>${escapeHtml(c.description||'')}</td>
+        <td class="num">${fmt(c.amount)}</td>
+        <td><button class="icon-btn" onclick="deleteWaterCost('${c.id}')">✕</button></td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+    <div class="summary-row"><div class="item">Total water business costs: <b>${fmt(waterCostsTotal())}</b></div></div>
+  `;
+}
+function openWaterCostModal(){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add water business cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Category</label>
+        <select id="wc-cat">${WATER_COST_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Date</label><input id="wc-date" type="date" value="${todayISO()}"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="wc-desc" placeholder="e.g. Solar inverter service"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="wc-amount" type="number" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn water" onclick="saveWaterCost()">Add cost</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveWaterCost(){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('wc-amount').value || 0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  waterCosts.push({
+    id: uid(),
+    category: document.getElementById('wc-cat').value,
+    date: document.getElementById('wc-date').value,
+    description: document.getElementById('wc-desc').value.trim(),
+    amount
+  });
+  await storeSet('waterCosts', waterCosts);
+  closeModal();
+  renderAll();
+  showToast('Water cost added');
+}
+async function deleteWaterCost(id){
+  if(!requireOwner()) return;
+  waterCosts = waterCosts.filter(c=>c.id!==id);
+  await storeSet('waterCosts', waterCosts);
+  renderAll();
+}
+
 /* ---------------- Water customers ---------------- */
+function depositsHeldTotal(){
+  return customers.reduce((s,c)=> s + ((c.deposit && c.deposit.status==='held') ? Number(c.deposit.amount||0) : 0), 0);
+}
 function renderWater(){
   const totals = customers.reduce((acc,c)=>{
     const t = customerTotals(c);
@@ -1179,7 +1264,9 @@ function renderWater(){
     <div class="card water"><div class="label">Total billed</div><div class="value">${fmt(totals.billed)}</div></div>
     <div class="card growth"><div class="label">Total collected</div><div class="value">${fmt(totals.paid)}</div></div>
     <div class="card gold"><div class="label">Outstanding balance</div><div class="value">${fmt(totals.balance)}</div></div>
+    <div class="card onion"><div class="label">Deposits held (not income)</div><div class="value">${fmt(depositsHeldTotal())}</div></div>
   `;
+  renderWaterCostsList();
 
   const el = document.getElementById('custList');
   if(!customers.length){ el.innerHTML = `<div class="empty" style="grid-column:1/-1;">No water customers yet. Click <b>+ New customer</b> to add a neighbour or farmer you supply.</div>`; return; }
@@ -1201,6 +1288,17 @@ function renderWater(){
         <div class="item">Rate: <b>${fmt(c.ratePerUnit)} / ${escapeHtml(c.unitLabel)}</b></div>
         <div class="item">Billed: <b>${fmt(t.billed)}</b></div>
         <div class="item">Paid: <b>${fmt(t.paid)}</b></div>
+      </div>
+      <div style="margin-top:10px; padding:10px 12px; background:var(--bg-alt); border:1px solid var(--line); border-radius:8px; font-size:12.5px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        ${c.deposit && c.deposit.status==='held' ? `
+          <span>Deposit held: <b class="mono">${fmt(c.deposit.amount)}</b> <span style="color:var(--ink-soft);">(paid ${c.deposit.datePaid||'—'}, fully refundable)</span></span>
+          <button class="btn secondary small" onclick="refundDeposit('${c.id}')">Mark refunded</button>
+        ` : c.deposit && c.deposit.status==='refunded' ? `
+          <span style="color:var(--ink-soft);">Deposit of <b class="mono">${fmt(c.deposit.amount)}</b> refunded ${c.deposit.refundDate||''}</span>
+        ` : `
+          <span style="color:var(--ink-soft);">No deposit on file</span>
+          <button class="btn secondary small" onclick="openSetDepositModal('${c.id}')">+ Record deposit</button>
+        `}
       </div>
       <div class="section-head" style="margin-top:12px; margin-bottom:6px;">
         <h2 style="font-size:13px;">Billing history</h2>
@@ -1229,7 +1327,8 @@ function renderWater(){
 }
 
 function blankCustomer(){
-  return {id: uid(), name:'', phone:'', type:'Household', ratePerUnit:'', unitLabel:'1000L', bills:[]};
+  return {id: uid(), name:'', phone:'', type:'Household', ratePerUnit:'', unitLabel:'1000L', bills:[],
+    deposit: {amount:0, datePaid:'', status:'none', refundDate:''}};
 }
 function openCustomerModal(){
   const box = document.getElementById('modalBox');
@@ -1247,6 +1346,7 @@ function openCustomerModal(){
       <div class="field"><label>Rate (${CURRENCY})</label><input id="cu-rate" type="number" step="0.01" placeholder="e.g. 50"></div>
       <div class="field"><label>Per unit</label><input id="cu-unit" placeholder="e.g. 1000L, jerrycan, m3" value="1000L"></div>
     </div>
+    <div class="field"><label>Refundable deposit (${CURRENCY}) — optional</label><input id="cu-deposit" type="number" step="0.01" placeholder="e.g. 2000, leave blank if none"></div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
       <button class="btn water" onclick="saveNewCustomer()">Add customer</button>
@@ -1264,6 +1364,10 @@ async function saveNewCustomer(){
   c.type = document.getElementById('cu-type').value;
   c.ratePerUnit = document.getElementById('cu-rate').value;
   c.unitLabel = document.getElementById('cu-unit').value.trim() || '1000L';
+  const depositAmt = Number(document.getElementById('cu-deposit').value || 0);
+  if(depositAmt > 0){
+    c.deposit = {amount: depositAmt, datePaid: todayISO(), status:'held', refundDate:''};
+  }
   customers.push(c);
   await storeSet('customers', customers);
   closeModal();
@@ -1276,6 +1380,45 @@ async function deleteCustomer(id){
   customers = customers.filter(c=>c.id!==id);
   await storeSet('customers', customers);
   renderAll();
+}
+
+function openSetDepositModal(custId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Record refundable deposit</h3>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="dep-amount" type="number" step="0.01" placeholder="e.g. 2000"></div>
+    <div class="field"><label>Date paid</label><input id="dep-date" type="date" value="${todayISO()}"></div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">This is held on the customer's behalf and returned in full when their contract ends — it won't be counted as farm income.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn water" onclick="saveDeposit('${custId}')">Save deposit</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDeposit(custId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('dep-amount').value || 0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const c = customers.find(x=>x.id===custId);
+  c.deposit = { amount, datePaid: document.getElementById('dep-date').value, status:'held', refundDate:'' };
+  await storeSet('customers', customers);
+  closeModal();
+  renderAll();
+  showToast('Deposit recorded');
+}
+async function refundDeposit(custId){
+  if(!requireOwner()) return;
+  const c = customers.find(x=>x.id===custId);
+  if(!c || !c.deposit) return;
+  if(!confirm(`Confirm you have refunded ${fmt(c.deposit.amount)} to ${c.name}? This just marks it as returned — it was never counted as income.`)) return;
+  c.deposit.status = 'refunded';
+  c.deposit.refundDate = todayISO();
+  await storeSet('customers', customers);
+  renderAll();
+  showToast('Deposit marked as refunded');
 }
 
 function openBillModal(custId){
@@ -1561,13 +1704,16 @@ function renderReports(){
   const cropRevenue = filtered.reduce((s,b)=>s+batchRevenue(b),0);
   const cropProfit = cropRevenue - cropCost;
   const waterTotals = customers.reduce((acc,c)=>{ const t=customerTotals(c); acc.billed+=t.billed; acc.paid+=t.paid; acc.balance+=t.balance; return acc; },{billed:0,paid:0,balance:0});
-  const netBusiness = cropProfit + waterTotals.billed;
+  const waterCostsSum = waterCostsTotal();
+  const waterProfit = waterTotals.billed - waterCostsSum;
+  const netBusiness = cropProfit + waterProfit;
+  const depositsHeld = depositsHeldTotal();
 
   document.getElementById('reportCards').innerHTML = `
-    <div class="card onion"><div class="label">Crop revenue</div><div class="value">${fmt(cropRevenue)}</div></div>
-    <div class="card growth"><div class="label">Crop cost</div><div class="value">${fmt(cropCost)}</div></div>
-    <div class="card gold"><div class="label">Crop profit / loss</div><div class="value" style="color:${cropProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(cropProfit)}</div></div>
-    <div class="card water"><div class="label">Combined business net</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
+    <div class="card onion"><div class="label">Crop profit / loss</div><div class="value" style="color:${cropProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(cropProfit)}</div></div>
+    <div class="card water"><div class="label">Water profit (billed − water costs)</div><div class="value" style="color:${waterProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(waterProfit)}</div></div>
+    <div class="card gold"><div class="label">Consolidated farm net profit</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
+    <div class="card growth"><div class="label">Deposits held (excluded above)</div><div class="value">${fmt(depositsHeld)}</div></div>
   `;
 
   document.getElementById('reportBatchTable').innerHTML = filtered.length ? `
@@ -1603,7 +1749,13 @@ function renderReports(){
       <td class="num" style="color:${t.balance>0?'var(--danger)':'var(--growth)'}">${fmt(t.balance)}</td>
     </tr>`; }).join('')}
     <tr><td><b>Total</b></td><td></td><td class="num"><b>${fmt(waterTotals.billed)}</b></td><td class="num"><b>${fmt(waterTotals.paid)}</b></td><td class="num"><b>${fmt(waterTotals.balance)}</b></td></tr>
-    </tbody></table>` : `<div class="empty">No water customers logged yet.</div>`;
+    </tbody></table>
+    <div class="summary-row">
+      <div class="item">Water business costs: <b>${fmt(waterCostsSum)}</b></div>
+      <div class="item">Water profit (billed − costs): <b style="color:${waterProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(waterProfit)}</b></div>
+      <div class="item">Deposits held: <b>${fmt(depositsHeld)}</b> <span style="color:var(--ink-soft);">(refundable, not counted above)</span></div>
+    </div>
+    ` : `<div class="empty">No water customers logged yet.</div>`;
 
   document.getElementById('insightsList').innerHTML = buildInsights(filtered, waterTotals).map(i=>`<div class="insight ${i.type}">${i.text}</div>`).join('') || `<div class="empty">Log a few harvests and water bills to start seeing suggestions here.</div>`;
 }
