@@ -274,6 +274,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -1343,7 +1344,7 @@ function generateMonthlyInvoices(){
   const month = document.getElementById('invoiceMonth').value;
   if(!month){ showToast('Pick a month first'); return; }
   _invoiceTexts = {};
-  _invoicePhones = {};
+  _invoiceData = {};
   const rows = customers.map(c=>{
     const bills = c.bills||[];
     const inMonth = bills.filter(b=>(b.date||'').slice(0,7)===month);
@@ -1351,7 +1352,7 @@ function generateMonthlyInvoices(){
     const priorBalance = priorUnpaid.reduce((s,b)=>s+Number(b.amount||0),0);
     const monthTotal = inMonth.reduce((s,b)=>s+Number(b.amount||0),0);
     const totalDue = priorBalance + monthTotal;
-    return {c, inMonth, priorBalance, monthTotal, totalDue};
+    return {c, inMonth, priorBalance, monthTotal, totalDue, month};
   }).filter(r=>r.inMonth.length>0 || r.priorBalance>0);
 
   const el = document.getElementById('invoiceResults');
@@ -1373,7 +1374,7 @@ TOTAL DUE:                 ${fmt(r.totalDue)}
 Rate: ${fmt(r.c.ratePerUnit)} per ${r.c.unitLabel}
 Please settle at your earliest convenience. Thank you for your custom.`;
     _invoiceTexts[r.c.id] = text;
-    _invoicePhones[r.c.id] = r.c.phone || '';
+    _invoiceData[r.c.id] = r;
     return `
     <div class="invoice-card">
       <div class="cust-head">
@@ -1384,14 +1385,15 @@ Please settle at your earliest convenience. Thank you for your custom.`;
         <div class="balance ${r.totalDue>0?'due':'clear'}">${fmt(r.totalDue)}</div>
       </div>
       <pre class="invoice-pre">${escapeHtml(text)}</pre>
-      <div style="margin-top:8px; text-align:right; display:flex; gap:8px; justify-content:flex-end;">
+      <div style="margin-top:8px; text-align:right; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
         <button class="btn secondary small" onclick="copyInvoice('${r.c.id}')">Copy bill text</button>
-        <button class="btn water small" onclick="sendInvoiceToWhatsApp('${r.c.id}')">Send via WhatsApp</button>
+        <button class="btn water small" onclick="sendInvoicePdfToWhatsApp('${r.c.id}')">Send PDF via WhatsApp</button>
       </div>
     </div>`;
   }).join('');
 }
-let _invoicePhones = {};
+let _invoiceData = {};
+
 function normalizePhoneForWhatsApp(raw){
   if(!raw) return '';
   let digits = String(raw).replace(/\D/g,''); // strip spaces, dashes, +, brackets etc.
@@ -1402,16 +1404,99 @@ function normalizePhoneForWhatsApp(raw){
   }
   return digits;
 }
-function sendInvoiceToWhatsApp(custId){
-  const text = _invoiceTexts[custId];
-  if(!text) return;
-  const phone = normalizePhoneForWhatsApp(_invoicePhones[custId]);
+function slugify(s){
+  return (s||'bill').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+
+function buildInvoicePDF(data){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const left = 50, right = 545;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(140,47,57);
+  doc.text('DEMWA FARM LEDGER', left, 60);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(107,95,78);
+  doc.text('Water Supply Bill', left, 78);
+
+  doc.setDrawColor(220,208,182); doc.line(left, 90, right, 90);
+
+  doc.setTextColor(36,28,21); doc.setFontSize(11);
+  doc.setFont('helvetica','bold'); doc.text('Customer:', left, 114);
+  doc.setFont('helvetica','normal'); doc.text(data.c.name + (data.c.phone ? ` (${data.c.phone})` : ''), left+90, 114);
+  doc.setFont('helvetica','bold'); doc.text('Billing period:', left, 132);
+  doc.setFont('helvetica','normal'); doc.text(monthLabel(data.month), left+90, 132);
+
+  let y = 162;
+  doc.setFont('helvetica','bold');
+  doc.text('Date', left, y); doc.text('Units', left+170, y); doc.text('Amount', right, y, {align:'right'});
+  y += 8; doc.line(left, y, right, y); y += 20;
+
+  doc.setFont('helvetica','normal');
+  if(data.inMonth.length){
+    data.inMonth.forEach(b=>{
+      doc.text(b.date || '', left, y);
+      doc.text(`${b.units||''} ${data.c.unitLabel}`, left+170, y);
+      doc.text(fmt(b.amount), right, y, {align:'right'});
+      y += 20;
+    });
+  } else {
+    doc.setFont('helvetica','italic');
+    doc.text('(no new supply logged this month)', left, y);
+    doc.setFont('helvetica','normal');
+    y += 20;
+  }
+
+  y += 6; doc.line(left, y, right, y); y += 24;
+  doc.text('This period:', left, y); doc.text(fmt(data.monthTotal), right, y, {align:'right'}); y += 20;
+  doc.text('Balance brought forward:', left, y); doc.text(fmt(data.priorBalance), right, y, {align:'right'}); y += 26;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(140,47,57);
+  doc.text('TOTAL DUE:', left, y); doc.text(fmt(data.totalDue), right, y, {align:'right'}); y += 34;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(107,95,78);
+  doc.text(`Rate: ${fmt(data.c.ratePerUnit)} per ${data.c.unitLabel}`, left, y); y += 22;
+  doc.setFont('helvetica','italic');
+  doc.text('Please settle at your earliest convenience. Thank you for your custom.', left, y);
+
+  return doc;
+}
+
+async function sendInvoicePdfToWhatsApp(custId){
+  const data = _invoiceData[custId];
+  if(!data) return;
+  const doc = buildInvoicePDF(data);
+  const filename = `Water-Bill-${slugify(data.c.name)}-${data.month}.pdf`;
+  const phone = normalizePhoneForWhatsApp(data.c.phone);
+
+  // Mobile with native share support: hand the actual PDF to the OS share
+  // sheet so WhatsApp receives it as a real attachment, not just text.
+  try{
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type:'application/pdf' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({
+        files:[file],
+        title: `Water bill — ${data.c.name}`,
+        text: `Water bill for ${monthLabel(data.month)}, total due ${fmt(data.totalDue)}.`
+      });
+      return;
+    }
+  } catch(e){
+    if(e && e.name === 'AbortError') return; // user cancelled the share sheet — not an error
+    console.error(e);
+  }
+
+  // Desktop fallback: WhatsApp gives web pages no way to auto-attach a file,
+  // so download the PDF and open a chat with instructions to attach it.
+  doc.save(filename);
+  const note = `Water bill for ${data.c.name} — ${monthLabel(data.month)}, total due ${fmt(data.totalDue)}. PDF downloaded as "${filename}" — please attach it to this chat.`;
   const url = phone
-    ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-    : `https://wa.me/?text=${encodeURIComponent(text)}`;
-  if(!phone) showToast('No phone number on file — pick the contact in WhatsApp manually');
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(note)}`
+    : `https://wa.me/?text=${encodeURIComponent(note)}`;
+  showToast('PDF downloaded — attach it in the WhatsApp chat that just opened');
   window.open(url, '_blank');
 }
+
 function copyInvoice(custId){
   const text = _invoiceTexts[custId];
   if(!text) return;
