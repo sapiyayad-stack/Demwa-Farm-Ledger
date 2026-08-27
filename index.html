@@ -309,7 +309,7 @@
     <div class="nav" id="nav">
       <button data-tab="dashboard" class="active"><span class="dot"></span>Dashboard</button>
       <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
-      <button data-tab="water"><span class="dot"></span>Water Customers</button>
+      <button data-tab="water"><span class="dot"></span>Water Records</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
@@ -371,7 +371,7 @@
     <div id="tab-water" style="display:none;">
       <div class="topline">
         <div>
-          <h1>Water customers</h1>
+          <h1>Water records</h1>
           <p>Borehole supply to neighbours and farmers — billing and payment records.</p>
         </div>
         <button class="btn water" id="btnNewCustomer" onclick="openCustomerModal()">+ New customer</button>
@@ -1805,7 +1805,7 @@ function buildInsights(filtered, waterTotals){
 
   // water collections
   if(waterTotals.billed>0 && waterTotals.balance > waterTotals.billed*0.3){
-    insights.push({type:'warn', text:`${fmt(waterTotals.balance)} in water bills is still unpaid — over 30% of everything billed. Sending monthly bills promptly (see the Water Customers tab) can help close this gap.`});
+    insights.push({type:'warn', text:`${fmt(waterTotals.balance)} in water bills is still unpaid — over 30% of everything billed. Sending monthly bills promptly (see the Water Records tab) can help close this gap.`});
   } else if(waterTotals.billed>0){
     insights.push({type:'good', text:`Water bill collection is healthy — ${fmt(waterTotals.paid)} of ${fmt(waterTotals.billed)} billed has been collected.`});
   }
