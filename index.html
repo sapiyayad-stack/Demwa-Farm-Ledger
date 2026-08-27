@@ -951,7 +951,10 @@ function renderBatches(){
             <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
             <td>${escapeHtml(c.description||'')}</td>
             <td class="num">${fmt(c.amount)}</td>
-            <td><button class="icon-btn" onclick="event.stopPropagation(); deleteCost('${b.id}','${c.id}')">✕</button></td>
+            <td>
+              <button class="icon-btn" onclick="event.stopPropagation(); openCostModal('${b.id}','${c.id}')">Edit</button>
+              <button class="icon-btn" onclick="event.stopPropagation(); deleteCost('${b.id}','${c.id}')">✕</button>
+            </td>
           </tr>
         `).join('')}
         </tbody></table>` : `<div class="empty">No costs logged yet for this batch.</div>`}
@@ -1112,42 +1115,50 @@ async function markStage(batchId, stageKey, done){
 }
 
 /* ---- Modals: cost ---- */
-function openCostModal(batchId){
+function openCostModal(batchId, costId){
+  const b = batches.find(x=>x.id===batchId);
+  const existing = costId ? b.costs.find(c=>c.id===costId) : null;
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <button class="close-x" onclick="closeModal()">✕</button>
-    <h3>Add cost entry</h3>
+    <h3>${existing ? 'Edit cost entry' : 'Add cost entry'}</h3>
     <div class="field-row">
       <div class="field"><label>Category</label>
-        <select id="c-cat">${COST_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+        <select id="c-cat">${COST_CATS.map(c=>`<option ${existing && existing.category===c ? 'selected':''}>${c}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>Date</label><input id="c-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Date</label><input id="c-date" type="date" value="${existing?existing.date:todayISO()}"></div>
     </div>
-    <div class="field"><label>Description</label><input id="c-desc" placeholder="e.g. DAP fertilizer, 2 bags"></div>
-    <div class="field"><label>Amount (${CURRENCY})</label><input id="c-amount" type="number" step="0.01"></div>
+    <div class="field"><label>Description</label><input id="c-desc" value="${escapeHtml(existing?existing.description||'':'')}" placeholder="e.g. DAP fertilizer, 2 bags"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="c-amount" type="number" step="0.01" value="${existing?existing.amount:''}"></div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn" onclick="saveCost('${batchId}')">Add cost</button>
+      <button class="btn" onclick="saveCost('${batchId}'${costId ? `,'${costId}'` : ''})">${existing ? 'Save changes' : 'Add cost'}</button>
     </div>
   `;
   openModal();
 }
-async function saveCost(batchId){
+async function saveCost(batchId, costId){
   if(!requireOwner()) return;
   const amount = Number(document.getElementById('c-amount').value || 0);
   if(!amount){ showToast('Enter an amount'); return; }
   const b = batches.find(x=>x.id===batchId);
-  b.costs.push({
-    id: uid(),
+  const entry = {
+    id: costId || uid(),
     category: document.getElementById('c-cat').value,
     date: document.getElementById('c-date').value,
     description: document.getElementById('c-desc').value.trim(),
     amount
-  });
+  };
+  if(costId){
+    const idx = b.costs.findIndex(c=>c.id===costId);
+    if(idx>-1) b.costs[idx] = entry;
+  } else {
+    b.costs.push(entry);
+  }
   await storeSet('batches', batches);
   closeModal();
   renderAll();
-  showToast('Cost added');
+  showToast(costId ? 'Cost updated' : 'Cost added');
 }
 
 /* ---- Modals: observations ---- */
@@ -1199,49 +1210,59 @@ function renderWaterCostsList(){
         <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
         <td>${escapeHtml(c.description||'')}</td>
         <td class="num">${fmt(c.amount)}</td>
-        <td><button class="icon-btn" onclick="deleteWaterCost('${c.id}')">✕</button></td>
+        <td>
+          <button class="icon-btn" onclick="openWaterCostModal('${c.id}')">Edit</button>
+          <button class="icon-btn" onclick="deleteWaterCost('${c.id}')">✕</button>
+        </td>
       </tr>
     `).join('')}
     </tbody></table>
     <div class="summary-row"><div class="item">Total water business costs: <b>${fmt(waterCostsTotal())}</b></div></div>
   `;
 }
-function openWaterCostModal(){
+function openWaterCostModal(costId){
   if(!requireOwner()) return;
+  const existing = costId ? waterCosts.find(c=>c.id===costId) : null;
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <button class="close-x" onclick="closeModal()">✕</button>
-    <h3>Add water business cost</h3>
+    <h3>${existing ? 'Edit water business cost' : 'Add water business cost'}</h3>
     <div class="field-row">
       <div class="field"><label>Category</label>
-        <select id="wc-cat">${WATER_COST_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+        <select id="wc-cat">${WATER_COST_CATS.map(c=>`<option ${existing && existing.category===c ? 'selected':''}>${c}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>Date</label><input id="wc-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Date</label><input id="wc-date" type="date" value="${existing?existing.date:todayISO()}"></div>
     </div>
-    <div class="field"><label>Description</label><input id="wc-desc" placeholder="e.g. Solar inverter service"></div>
-    <div class="field"><label>Amount (${CURRENCY})</label><input id="wc-amount" type="number" step="0.01"></div>
+    <div class="field"><label>Description</label><input id="wc-desc" value="${escapeHtml(existing?existing.description||'':'')}" placeholder="e.g. Solar inverter service"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="wc-amount" type="number" step="0.01" value="${existing?existing.amount:''}"></div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn water" onclick="saveWaterCost()">Add cost</button>
+      <button class="btn water" onclick="saveWaterCost(${existing ? `'${costId}'` : 'null'})">${existing ? 'Save changes' : 'Add cost'}</button>
     </div>
   `;
   openModal();
 }
-async function saveWaterCost(){
+async function saveWaterCost(costId){
   if(!requireOwner()) return;
   const amount = Number(document.getElementById('wc-amount').value || 0);
   if(!amount){ showToast('Enter an amount'); return; }
-  waterCosts.push({
-    id: uid(),
+  const entry = {
+    id: costId || uid(),
     category: document.getElementById('wc-cat').value,
     date: document.getElementById('wc-date').value,
     description: document.getElementById('wc-desc').value.trim(),
     amount
-  });
+  };
+  if(costId){
+    const idx = waterCosts.findIndex(c=>c.id===costId);
+    if(idx>-1) waterCosts[idx] = entry;
+  } else {
+    waterCosts.push(entry);
+  }
   await storeSet('waterCosts', waterCosts);
   closeModal();
   renderAll();
-  showToast('Water cost added');
+  showToast(costId ? 'Water cost updated' : 'Water cost added');
 }
 async function deleteWaterCost(id){
   if(!requireOwner()) return;
