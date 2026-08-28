@@ -184,7 +184,7 @@
   .overlay.open{display:flex;}
   .modal{
     background:var(--bg-alt); border-radius:var(--radius); padding:24px 26px; width:480px; max-width:100%;
-    border:1px solid var(--line);
+    border:1px solid var(--line); overflow:hidden;
   }
   .modal h3{margin:0 0 16px;}
   .field{margin-bottom:12px;}
@@ -202,6 +202,7 @@
   .toast{
     position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:10px 16px;
     border-radius:8px; font-size:13px; opacity:0; transform:translateY(8px); transition:all .25s; z-index:100;
+    max-width:340px; line-height:1.4;
   }
   .toast.show{opacity:1; transform:translateY(0);}
 
@@ -252,13 +253,39 @@
   .crop-card .row{display:flex; justify-content:space-between; font-size:12.5px; margin-top:4px;}
   .crop-card .row b{font-family:'IBM Plex Mono'; font-weight:500;}
 
-  .guide-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:12px; overflow:hidden;}
-  .guide-head{padding:14px 16px; display:flex; justify-content:space-between; align-items:flex-start; cursor:pointer;}
-  .guide-title{font-family:'Fraunces',serif; font-weight:600; font-size:16px;}
-  .guide-crop{display:inline-block; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; padding:2px 8px; border-radius:20px; background:var(--growth-wash); color:var(--growth); margin-bottom:4px;}
-  .guide-summary{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
-  .guide-body{padding:0 16px 16px; border-top:1px solid var(--line); display:none; font-size:13.5px; line-height:1.7; white-space:pre-wrap;}
-  .guide-body.open{display:block; padding-top:14px;}
+  .guide-filters{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .guide-chip{
+    all:unset; cursor:pointer; font-size:12.5px; font-weight:500; padding:7px 15px; border-radius:20px;
+    border:1.5px solid var(--line); color:var(--ink-soft); transition:all .15s; display:inline-flex; align-items:center; gap:6px;
+  }
+  .guide-chip:hover{border-color:var(--ink-soft);}
+  .guide-chip.active{border-color:transparent; color:#fff;}
+
+  .guide-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:18px;}
+  .guide-tile{
+    position:relative; background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    cursor:pointer; transition:transform .18s ease, box-shadow .18s ease; display:flex; flex-direction:column;
+  }
+  .guide-tile:hover{transform:translateY(-4px); box-shadow:0 14px 28px -12px rgba(36,28,21,.25);}
+  .guide-tile .tile-band{height:7px; width:100%;}
+  .guide-tile .tile-body{padding:18px 18px 20px; flex:1; display:flex; flex-direction:column;}
+  .guide-icon-badge{
+    width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    font-size:22px; margin-bottom:12px;
+  }
+  .guide-tile .tile-crop{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin-bottom:6px;}
+  .guide-tile .tile-title{font-family:'Fraunces',serif; font-weight:600; font-size:19px; line-height:1.25; margin-bottom:8px;}
+  .guide-tile .tile-summary{font-size:13px; color:var(--ink-soft); line-height:1.5; flex:1;}
+  .guide-tile .tile-read{font-size:12.5px; font-weight:600; margin-top:14px; display:flex; align-items:center; gap:5px;}
+
+  .guide-empty-hero{
+    grid-column:1/-1; text-align:center; padding:48px 20px; border:2px dashed var(--line); border-radius:16px; color:var(--ink-soft);
+  }
+
+  .reader-header{margin:-24px -26px 20px; padding:26px; color:#fff;}
+  .reader-crop-tag{display:inline-flex; align-items:center; gap:6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; background:rgba(255,255,255,.22); padding:4px 12px; border-radius:20px; margin-bottom:10px;}
+  .reader-title{font-family:'Fraunces',serif; font-weight:700; font-size:26px; line-height:1.2;}
+  .reader-body{font-size:14.5px; line-height:1.85; white-space:pre-wrap; color:var(--ink);}
 
   @media (max-width:900px){
     .app{flex-direction:column;}
@@ -1853,31 +1880,103 @@ async function fetchGuides(){
   _guidesCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
   return _guidesCache;
 }
+
+// Each crop family gets a consistent accent + soft wash, so the guide grid
+// reads like a real magazine section rather than one flat list.
+const GUIDE_PALETTES = [
+  {accent:'#8C2F39', wash:'#F5E1E1'}, // onion / maroon
+  {accent:'#B8791E', wash:'#F6E7C9'}, // maize, gold grains
+  {accent:'#C1440E', wash:'#F7DFCE'}, // tomato, pepper
+  {accent:'#4F6B3A', wash:'#E3ECD9'}, // leafy greens
+  {accent:'#6B3F69', wash:'#EBE0EA'}, // beans, legumes
+  {accent:'#8B5E34', wash:'#EFE3D0'}, // tubers
+  {accent:'#24677D', wash:'#DCEAEE'}, // general / water-linked
+  {accent:'#A23B5C', wash:'#F3DEE6'}  // fruit, melons
+];
+const GUIDE_ICON_MAP = [
+  [/onion/i, '🧅'], [/maize|corn/i, '🌽'], [/tomato/i, '🍅'],
+  [/kale|cabbage|spinach|greens|lettuce|collard/i, '🥬'],
+  [/bean|pea|legume|lentil|cowpea/i, '🫘'],
+  [/potato|yam|cassava|sweet ?potato/i, '🥔'],
+  [/pepper|chili|chilli|capsicum/i, '🌶️'],
+  [/carrot/i, '🥕'], [/melon|watermelon/i, '🍉'],
+  [/mango/i, '🥭'], [/avocado/i, '🥑'], [/banana/i, '🍌'],
+  [/coffee/i, '☕'], [/rice/i, '🌾']
+];
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31 + s.charCodeAt(i))>>>0; } return h; }
+function guidePalette(cropType){
+  const key = (cropType||'General').trim().toLowerCase();
+  const known = ['onion','maize|corn','tomato|pepper','kale|greens|cabbage|spinach','bean|legume|pea','potato|yam|cassava'];
+  for(let i=0;i<known.length;i++){ if(new RegExp(known[i]).test(key)) return GUIDE_PALETTES[i]; }
+  return GUIDE_PALETTES[hashStr(key) % GUIDE_PALETTES.length];
+}
+function guideIcon(cropType){
+  const key = cropType||'';
+  for(const [re, icon] of GUIDE_ICON_MAP){ if(re.test(key)) return icon; }
+  return '🌱';
+}
+
+let _guideFilter = {}; // per-container active crop filter
 function renderGuidesInto(containerId, adminControls){
   const el = document.getElementById(containerId);
-  if(!_guidesCache.length){ el.innerHTML = `<div class="empty">No planting guides posted yet.</div>`; return; }
-  el.innerHTML = _guidesCache.map(g=>`
-    <div class="guide-card">
-      <div class="guide-head" onclick="toggleGuide('${g.id}', '${containerId}')">
-        <div>
-          <div class="guide-crop">${escapeHtml(g.cropType||'General')}</div>
-          <div class="guide-title">${escapeHtml(g.title||'Untitled guide')}</div>
-          <div class="guide-summary">${escapeHtml(g.summary||'')}</div>
+  if(!_guidesCache.length){
+    el.innerHTML = `<div class="guide-empty-hero">📖 No planting guides posted yet.</div>`;
+    return;
+  }
+  const crops = Array.from(new Set(_guidesCache.map(g=>g.cropType||'General')));
+  const active = _guideFilter[containerId] || 'all';
+
+  const chips = `<div class="guide-filters">
+    <button class="guide-chip ${active==='all'?'active':''}" style="${active==='all'?'background:var(--ink);':''}" onclick="setGuideFilter('${containerId}','all',${adminControls})">All guides</button>
+    ${crops.map(c=>{
+      const p = guidePalette(c);
+      const isActive = active===c;
+      return `<button class="guide-chip ${isActive?'active':''}" style="${isActive?`background:${p.accent};`:`color:${p.accent}; border-color:${p.wash};`}" onclick="setGuideFilter('${containerId}','${escapeHtml(c)}',${adminControls})">${guideIcon(c)} ${escapeHtml(c)}</button>`;
+    }).join('')}
+  </div>`;
+
+  const shown = active==='all' ? _guidesCache : _guidesCache.filter(g=>(g.cropType||'General')===active);
+  const grid = shown.length ? `<div class="guide-grid">
+    ${shown.map(g=>{
+      const p = guidePalette(g.cropType);
+      return `<div class="guide-tile" onclick="openGuideReader('${g.id}', ${adminControls})">
+        <div class="tile-band" style="background:${p.accent};"></div>
+        <div class="tile-body">
+          <div class="guide-icon-badge" style="background:${p.wash};">${guideIcon(g.cropType)}</div>
+          <div class="tile-crop" style="color:${p.accent};">${escapeHtml(g.cropType||'General')}</div>
+          <div class="tile-title">${escapeHtml(g.title||'Untitled guide')}</div>
+          <div class="tile-summary">${escapeHtml(g.summary||'')}</div>
+          <div class="tile-read" style="color:${p.accent};">Read guide →</div>
         </div>
-      </div>
-      <div class="guide-body" id="guidebody-${containerId}-${g.id}">${escapeHtml(g.body||'')}
-        ${adminControls && isSiteAdmin() ? `
-          <div style="margin-top:14px; text-align:right;">
-            <button class="icon-btn" onclick="event.stopPropagation(); openGuideModal('${g.id}')">Edit</button>
-            <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deleteGuide('${g.id}')">Delete</button>
-          </div>` : ''}
-      </div>
-    </div>
-  `).join('');
+      </div>`;
+    }).join('')}
+  </div>` : `<div class="guide-empty-hero">No guides for this crop yet.</div>`;
+
+  el.innerHTML = chips + grid;
 }
-function toggleGuide(id, containerId){
-  const body = document.getElementById(`guidebody-${containerId}-${id}`);
-  body.classList.toggle('open');
+function setGuideFilter(containerId, crop, adminControls){
+  _guideFilter[containerId] = crop;
+  renderGuidesInto(containerId, adminControls);
+}
+function openGuideReader(guideId, adminControls){
+  const g = _guidesCache.find(x=>x.id===guideId);
+  if(!g) return;
+  const p = guidePalette(g.cropType);
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()" style="position:relative; z-index:2; color:#fff;">✕</button>
+    <div class="reader-header" style="background:${p.accent};">
+      <div class="reader-crop-tag">${guideIcon(g.cropType)} ${escapeHtml(g.cropType||'General')}</div>
+      <div class="reader-title">${escapeHtml(g.title||'Untitled guide')}</div>
+    </div>
+    <div class="reader-body">${escapeHtml(g.body||'')}</div>
+    ${adminControls && isSiteAdmin() ? `
+      <div style="margin-top:20px; text-align:right; border-top:1px solid var(--line); padding-top:14px;">
+        <button class="icon-btn" onclick="openGuideModal('${g.id}')">Edit</button>
+        <button class="icon-btn" style="color:var(--danger);" onclick="deleteGuide('${g.id}')">Delete</button>
+      </div>` : ''}
+  `;
+  openModal('620px');
 }
 async function renderGuidesTab(){
   document.getElementById('btnNewGuide').style.display = isSiteAdmin() ? '' : 'none';
@@ -1938,7 +2037,7 @@ async function saveGuide(guideId){
     renderGuidesTab();
   } catch(e){
     console.error(e);
-    showToast('Could not save — check your connection');
+    showToast(`Could not save: ${e.code||''} ${e.message||''}`);
   }
 }
 async function deleteGuide(guideId){
@@ -1950,7 +2049,7 @@ async function deleteGuide(guideId){
     renderGuidesTab();
   } catch(e){
     console.error(e);
-    showToast('Could not delete — check your connection');
+    showToast(`Could not delete: ${e.code||''} ${e.message||''}`);
   }
 }
 
@@ -2063,7 +2162,7 @@ async function submitSupportMessage(){
 }
 
 /* ---------------- Modal plumbing ---------------- */
-function openModal(){ document.getElementById('overlay').classList.add('open'); }
+function openModal(maxWidth){ document.getElementById('modalBox').style.maxWidth = maxWidth || ''; document.getElementById('overlay').classList.add('open'); }
 function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 
