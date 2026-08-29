@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Demwa Ledger">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#F8F3E6;
@@ -285,7 +285,31 @@
   .reader-header{margin:-24px -26px 20px; padding:26px; color:#fff;}
   .reader-crop-tag{display:inline-flex; align-items:center; gap:6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; background:rgba(255,255,255,.22); padding:4px 12px; border-radius:20px; margin-bottom:10px;}
   .reader-title{font-family:'Fraunces',serif; font-weight:700; font-size:26px; line-height:1.2;}
-  .reader-body{font-size:14.5px; line-height:1.85; white-space:pre-wrap; color:var(--ink);}
+  .reader-image{width:100%; max-height:280px; object-fit:cover; border-radius:12px; margin-bottom:22px; display:block;}
+  .reader-body{font-family:'Alegreya',serif; font-size:17px; line-height:1.9; color:var(--ink); max-width:640px; margin-left:auto; margin-right:auto;}
+  .reader-body p{margin:0 0 22px;}
+  .reader-body .r-heading{
+    font-family:'Alegreya',serif; font-weight:700; font-size:20px; color:var(--water);
+    text-decoration:underline; text-decoration-color:var(--water-light); text-underline-offset:5px;
+    margin:30px 0 14px;
+  }
+  .reader-body .r-heading:first-child{margin-top:0;}
+  .reader-body .r-tick{display:flex; align-items:flex-start; gap:10px; margin:0 0 12px; font-size:16.5px;}
+  .reader-body .r-tick .tick-mark{
+    flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--growth-wash); color:var(--growth);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; margin-top:2px;
+  }
+
+  .materials-section{margin-top:34px; padding-top:24px; border-top:2px solid var(--line);}
+  .materials-title{font-family:'Fraunces',serif; font-weight:600; font-size:17px; margin-bottom:12px;}
+  .materials-table{width:100%; border-collapse:collapse; font-family:'Work Sans',sans-serif;}
+  .materials-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:8px; border-bottom:2px solid var(--line);}
+  .materials-table td{padding:9px 8px; border-bottom:1px solid var(--line); font-size:13.5px;}
+  .materials-table .num{text-align:right; font-family:'IBM Plex Mono';}
+  .materials-table tr.total-row td{font-weight:700; border-top:2px solid var(--line); border-bottom:none;}
+
+  .mat-row{display:grid; grid-template-columns:1fr 90px 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
+  .mat-row input{padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:13px; font-family:'Work Sans';}
 
   @media (max-width:900px){
     .app{flex-direction:column;}
@@ -1940,7 +1964,9 @@ function renderGuidesInto(containerId, adminControls){
     ${shown.map(g=>{
       const p = guidePalette(g.cropType);
       return `<div class="guide-tile" onclick="openGuideReader('${g.id}', ${adminControls})">
-        <div class="tile-band" style="background:${p.accent};"></div>
+        ${g.imageUrl
+          ? `<img src="${escapeHtml(g.imageUrl)}" class="tile-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><div class="tile-band" style="background:${p.accent}; display:none;"></div>`
+          : `<div class="tile-band" style="background:${p.accent};"></div>`}
         <div class="tile-body">
           <div class="guide-icon-badge" style="background:${p.wash};">${guideIcon(g.cropType)}</div>
           <div class="tile-crop" style="color:${p.accent};">${escapeHtml(g.cropType||'General')}</div>
@@ -1958,6 +1984,48 @@ function setGuideFilter(containerId, crop, adminControls){
   _guideFilter[containerId] = crop;
   renderGuidesInto(containerId, adminControls);
 }
+// Turns plain guide text into spaced HTML: "## " lines become blue underlined
+// headings, "- " lines become tick-marked key points, blank lines separate
+// paragraphs. Lets the site admin write in plain text with a simple convention
+// instead of needing a rich text editor.
+function formatGuideBody(text){
+  const lines = (text||'').split(/\r?\n/);
+  let html = '', buffer = [];
+  function flush(){
+    if(buffer.length){ html += `<p>${buffer.map(escapeHtml).join('<br>')}</p>`; buffer = []; }
+  }
+  lines.forEach(line=>{
+    const t = line.trim();
+    if(t.startsWith('## ') || t.startsWith('# ')){
+      flush();
+      html += `<div class="r-heading">${escapeHtml(t.replace(/^#+\s*/,''))}</div>`;
+    } else if(t.startsWith('- ') || t.startsWith('* ')){
+      flush();
+      html += `<div class="r-tick"><span class="tick-mark">✓</span><span>${escapeHtml(t.replace(/^[-*]\s*/,''))}</span></div>`;
+    } else if(t===''){
+      flush();
+    } else {
+      buffer.push(line);
+    }
+  });
+  flush();
+  return html;
+}
+function renderMaterialsTable(items){
+  if(!items || !items.length) return '';
+  const total = items.reduce((s,it)=>s+Number(it.qty||0)*Number(it.price||0),0);
+  return `
+    <div class="materials-section">
+      <div class="materials-title">Items used</div>
+      <table class="materials-table">
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>
+        ${items.map(it=>`<tr><td>${escapeHtml(it.name)}</td><td class="num">${escapeHtml(String(it.qty||''))}</td><td class="num">${fmt(it.price)}</td><td class="num">${fmt(Number(it.qty||0)*Number(it.price||0))}</td></tr>`).join('')}
+        <tr class="total-row"><td colspan="3">Total</td><td class="num">${fmt(total)}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+}
 function openGuideReader(guideId, adminControls){
   const g = _guidesCache.find(x=>x.id===guideId);
   if(!g) return;
@@ -1969,14 +2037,16 @@ function openGuideReader(guideId, adminControls){
       <div class="reader-crop-tag">${guideIcon(g.cropType)} ${escapeHtml(g.cropType||'General')}</div>
       <div class="reader-title">${escapeHtml(g.title||'Untitled guide')}</div>
     </div>
-    <div class="reader-body">${escapeHtml(g.body||'')}</div>
+    ${g.imageUrl ? `<img src="${escapeHtml(g.imageUrl)}" class="reader-image" onerror="this.style.display='none'">` : ''}
+    <div class="reader-body">${formatGuideBody(g.body)}</div>
+    ${renderMaterialsTable(g.items)}
     ${adminControls && isSiteAdmin() ? `
       <div style="margin-top:20px; text-align:right; border-top:1px solid var(--line); padding-top:14px;">
         <button class="icon-btn" onclick="openGuideModal('${g.id}')">Edit</button>
         <button class="icon-btn" style="color:var(--danger);" onclick="deleteGuide('${g.id}')">Delete</button>
       </div>` : ''}
   `;
-  openModal('620px');
+  openModal('920px');
 }
 async function renderGuidesTab(){
   document.getElementById('btnNewGuide').style.display = isSiteAdmin() ? '' : 'none';
@@ -1997,9 +2067,26 @@ function openGuidesModal(){
     .catch(e=>{ console.error(e); document.getElementById('guidesModalList').innerHTML = `<div class="empty">Couldn't load guides — check your connection.</div>`; });
 }
 
+let _guideFormItems = [];
+function renderGuideItemRows(){
+  const el = document.getElementById('guideItemsRows');
+  if(!el) return;
+  el.innerHTML = (_guideFormItems.length ? _guideFormItems.map((it,i)=>`
+    <div class="mat-row">
+      <input placeholder="Item name" value="${escapeHtml(it.name||'')}" onchange="_guideFormItems[${i}].name=this.value">
+      <input type="number" placeholder="Qty" value="${it.qty||''}" onchange="_guideFormItems[${i}].qty=this.value">
+      <input type="number" placeholder="Price" value="${it.price||''}" onchange="_guideFormItems[${i}].price=this.value">
+      <button type="button" class="icon-btn" onclick="removeGuideItemRow(${i})">✕</button>
+    </div>
+  `).join('') : `<div style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">No items added yet.</div>`);
+}
+function addGuideItemRow(){ _guideFormItems.push({name:'', qty:'', price:''}); renderGuideItemRows(); }
+function removeGuideItemRow(i){ _guideFormItems.splice(i,1); renderGuideItemRows(); }
+
 function openGuideModal(guideId){
   if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
   const existing = guideId ? _guidesCache.find(g=>g.id===guideId) : null;
+  _guideFormItems = existing && existing.items ? JSON.parse(JSON.stringify(existing.items)) : [];
   const box = document.getElementById('modalBox');
   box.innerHTML = `
     <button class="close-x" onclick="closeModal()">✕</button>
@@ -2009,13 +2096,24 @@ function openGuideModal(guideId){
       <div class="field"><label>Title</label><input id="g-title" value="${escapeHtml(existing?.title||'')}" placeholder="e.g. Onion planting basics"></div>
     </div>
     <div class="field"><label>Short summary</label><input id="g-summary" value="${escapeHtml(existing?.summary||'')}" placeholder="One line shown in the list"></div>
-    <div class="field"><label>Full guide</label><textarea id="g-body" style="min-height:180px;" placeholder="Write the full guide here...">${escapeHtml(existing?.body||'')}</textarea></div>
+    <div class="field"><label>Cover image URL — optional</label><input id="g-image" value="${escapeHtml(existing?.imageUrl||'')}" placeholder="https://... (a public image link)"></div>
+    <div class="field">
+      <label>Full guide</label>
+      <textarea id="g-body" style="min-height:180px;" placeholder="Write the full guide here. Start a line with '## ' for a heading, and '- ' for a key point.">${escapeHtml(existing?.body||'')}</textarea>
+      <div style="font-size:11px; color:var(--ink-soft); margin-top:4px;">Tip: "## Land preparation" becomes a heading. "- Space rows 20cm apart" becomes a tick-marked point.</div>
+    </div>
+    <div class="field">
+      <label>Items used (optional)</label>
+      <div id="guideItemsRows"></div>
+      <button type="button" class="btn secondary small" onclick="addGuideItemRow()">+ Add item</button>
+    </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
       <button class="btn" onclick="saveGuide(${existing ? `'${guideId}'` : 'null'})">${existing ? 'Save changes' : 'Publish guide'}</button>
     </div>
   `;
   openModal();
+  renderGuideItemRows();
 }
 async function saveGuide(guideId){
   if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
@@ -2023,9 +2121,13 @@ async function saveGuide(guideId){
   const title = document.getElementById('g-title').value.trim();
   const summary = document.getElementById('g-summary').value.trim();
   const body = document.getElementById('g-body').value.trim();
+  const imageUrl = document.getElementById('g-image').value.trim();
+  const items = _guideFormItems
+    .filter(it=>it.name && it.name.trim())
+    .map(it=>({name:it.name.trim(), qty:Number(it.qty)||0, price:Number(it.price)||0}));
   if(!cropType || !title || !body){ showToast('Fill in crop, title, and the guide text'); return; }
   try{
-    const data = {cropType, title, summary, body, updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+    const data = {cropType, title, summary, body, imageUrl, items, updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
     if(guideId){
       await db.collection('guides').doc(guideId).update(data);
     } else {
