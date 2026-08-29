@@ -2113,6 +2113,45 @@ function renderGuideItemRows(){
 function addGuideItemRow(){ _guideFormItems.push({category:'', product:'', purpose:'', quantity:'', unitPrice:'', totalCost:''}); renderGuideItemRows(); }
 function removeGuideItemRow(i){ _guideFormItems.splice(i,1); renderGuideItemRows(); }
 
+function parseAndFillGuideTable(){
+  const raw = document.getElementById('g-mat-paste').value;
+  if(!raw.trim()){ showToast('Paste some table text first'); return; }
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+
+  let introLine = '';
+  let totalLine = '';
+  const dataLines = [];
+
+  lines.forEach(line=>{
+    const totalMatch = line.match(/Estimated Total Input Investment[:\s]*(.*)/i);
+    if(totalMatch){ totalLine = totalMatch[1].trim(); return; }
+    // Header row — column names, not data — skip it.
+    if(/category/i.test(line) && /product|chemical/i.test(line)) return;
+    // A row is "data" once it splits into at least 4 columns via tabs or
+    // 2+ spaces; anything before the first such row is treated as intro text.
+    const cols = line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/);
+    if(cols.length >= 4){
+      dataLines.push(cols.map(c=>c.trim()));
+    } else if(!dataLines.length){
+      introLine = introLine ? introLine + ' ' + line : line;
+    }
+  });
+
+  if(!dataLines.length){ showToast('Could not find any table rows — check the paste includes tab or multi-space separated columns'); return; }
+
+  const parsedItems = dataLines.map(cols=>({
+    category: cols[0]||'', product: cols[1]||'', purpose: cols[2]||'',
+    quantity: cols[3]||'', unitPrice: cols[4]||'', totalCost: cols[5]||''
+  }));
+
+  _guideFormItems = parsedItems;
+  renderGuideItemRows();
+  if(introLine) document.getElementById('g-mat-intro').value = introLine;
+  if(totalLine) document.getElementById('g-mat-total').value = totalLine;
+  document.getElementById('g-mat-paste').value = '';
+  showToast(`Parsed ${parsedItems.length} item${parsedItems.length!==1?'s':''} — review below, then Save`);
+}
+
 function openGuideModal(guideId){
   if(!isSiteAdmin()){ showToast('Only the site admin can edit guides'); return; }
   const existing = guideId ? _guidesCache.find(g=>g.id===guideId) : null;
@@ -2133,6 +2172,11 @@ function openGuideModal(guideId){
       <div style="font-size:11px; color:var(--ink-soft); margin-top:4px;">Tip: "## Land preparation" becomes a heading. "- Space rows 20cm apart" becomes a tick-marked point.</div>
     </div>
     <div class="field"><label>Items table intro — optional</label><textarea id="g-mat-intro" style="min-height:60px;" placeholder="e.g. Here is the itemized list of seeds, chemicals, fertilizers, and additives required for the entire production cycle...">${escapeHtml(existing?.materialsIntro||'')}</textarea></div>
+    <div class="field">
+      <label>Paste a whole table — fills everything below automatically</label>
+      <textarea id="g-mat-paste" style="min-height:90px; font-family:'IBM Plex Mono'; font-size:11.5px;" placeholder="Paste the intro line, header row, item rows, and the total line — copied straight from wherever you drafted the table."></textarea>
+      <button type="button" class="btn secondary small" style="margin-top:6px;" onclick="parseAndFillGuideTable()">Parse & fill</button>
+    </div>
     <div class="field">
       <label>Items used</label>
       <div id="guideItemsRows"></div>
