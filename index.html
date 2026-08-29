@@ -300,16 +300,26 @@
     display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; margin-top:2px;
   }
 
-  .materials-section{margin-top:34px; padding-top:24px; border-top:2px solid var(--line);}
-  .materials-title{font-family:'Fraunces',serif; font-weight:600; font-size:17px; margin-bottom:12px;}
-  .materials-table{width:100%; border-collapse:collapse; font-family:'Work Sans',sans-serif;}
-  .materials-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:8px; border-bottom:2px solid var(--line);}
-  .materials-table td{padding:9px 8px; border-bottom:1px solid var(--line); font-size:13.5px;}
-  .materials-table .num{text-align:right; font-family:'IBM Plex Mono';}
-  .materials-table tr.total-row td{font-weight:700; border-top:2px solid var(--line); border-bottom:none;}
+  .materials-section{margin-top:34px; padding-top:24px; border-top:2px solid var(--line); max-width:none;}
+  .materials-title{font-family:'Fraunces',serif; font-weight:600; font-size:19px; margin-bottom:6px;}
+  .materials-intro{font-family:'Work Sans',sans-serif; font-size:13.5px; color:var(--ink-soft); line-height:1.6; margin-bottom:16px;}
+  .materials-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .materials-table{width:100%; min-width:720px; border-collapse:collapse; font-family:'Work Sans',sans-serif;}
+  .materials-table th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:9px 10px; border-bottom:2px solid var(--line); background:var(--bg-alt);}
+  .materials-table td{padding:11px 10px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; line-height:1.5;}
+  .materials-table td.mat-cat{font-weight:700; color:var(--onion); white-space:nowrap;}
+  .materials-table td.mat-purpose{color:var(--ink-soft); font-size:12.5px;}
+  .materials-table .num{text-align:right; font-family:'IBM Plex Mono'; white-space:nowrap;}
+  .materials-total-line{
+    margin-top:16px; padding:14px 18px; background:var(--gold-wash); border-radius:10px;
+    font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--ink);
+  }
 
-  .mat-row{display:grid; grid-template-columns:1fr 90px 110px 32px; gap:8px; margin-bottom:8px; align-items:center;}
-  .mat-row input{padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:13px; font-family:'Work Sans';}
+  .mat-item-card{border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--bg-alt);}
+  .mat-item-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;}
+  .mat-item-grid input, .mat-item-grid textarea{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:'Work Sans'; box-sizing:border-box;}
+  .mat-item-grid label{display:block; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:3px;}
+  .mat-item-remove{text-align:right;}
 
   @media (max-width:900px){
     .app{flex-direction:column;}
@@ -2011,19 +2021,32 @@ function formatGuideBody(text){
   flush();
   return html;
 }
-function renderMaterialsTable(items){
-  if(!items || !items.length) return '';
-  const total = items.reduce((s,it)=>s+Number(it.qty||0)*Number(it.price||0),0);
+function renderMaterialsTable(items, intro, totalLine){
+  if((!items || !items.length) && !intro && !totalLine) return '';
   return `
     <div class="materials-section">
       <div class="materials-title">Items used</div>
+      ${intro ? `<div class="materials-intro">${escapeHtml(intro)}</div>` : ''}
+      ${items && items.length ? `
+      <div class="materials-table-wrap">
       <table class="materials-table">
-        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Subtotal</th></tr></thead>
+        <thead><tr>
+          <th>Category</th><th>Product / Chemical Name</th><th>Function / Purpose</th>
+          <th class="num">Quantity Required</th><th class="num">Est. Unit Price</th><th class="num">Est. Total Cost</th>
+        </tr></thead>
         <tbody>
-        ${items.map(it=>`<tr><td>${escapeHtml(it.name)}</td><td class="num">${escapeHtml(String(it.qty||''))}</td><td class="num">${fmt(it.price)}</td><td class="num">${fmt(Number(it.qty||0)*Number(it.price||0))}</td></tr>`).join('')}
-        <tr class="total-row"><td colspan="3">Total</td><td class="num">${fmt(total)}</td></tr>
+        ${items.map(it=>`<tr>
+          <td class="mat-cat">${escapeHtml(it.category||'')}</td>
+          <td>${escapeHtml(it.product||'')}</td>
+          <td class="mat-purpose">${escapeHtml(it.purpose||'')}</td>
+          <td class="num">${escapeHtml(it.quantity||'')}</td>
+          <td class="num">${escapeHtml(it.unitPrice||'')}</td>
+          <td class="num">${escapeHtml(it.totalCost||'')}</td>
+        </tr>`).join('')}
         </tbody>
       </table>
+      </div>` : ''}
+      ${totalLine ? `<div class="materials-total-line">Estimated Total Input Investment: ${escapeHtml(totalLine)}</div>` : ''}
     </div>`;
 }
 function openGuideReader(guideId, adminControls){
@@ -2039,7 +2062,7 @@ function openGuideReader(guideId, adminControls){
     </div>
     ${g.imageUrl ? `<img src="${escapeHtml(g.imageUrl)}" class="reader-image" onerror="this.style.display='none'">` : ''}
     <div class="reader-body">${formatGuideBody(g.body)}</div>
-    ${renderMaterialsTable(g.items)}
+    ${renderMaterialsTable(g.items, g.materialsIntro, g.materialsTotal)}
     ${adminControls && isSiteAdmin() ? `
       <div style="margin-top:20px; text-align:right; border-top:1px solid var(--line); padding-top:14px;">
         <button class="icon-btn" onclick="openGuideModal('${g.id}')">Edit</button>
@@ -2072,15 +2095,22 @@ function renderGuideItemRows(){
   const el = document.getElementById('guideItemsRows');
   if(!el) return;
   el.innerHTML = (_guideFormItems.length ? _guideFormItems.map((it,i)=>`
-    <div class="mat-row">
-      <input placeholder="Item name" value="${escapeHtml(it.name||'')}" onchange="_guideFormItems[${i}].name=this.value">
-      <input type="number" placeholder="Qty" value="${it.qty||''}" onchange="_guideFormItems[${i}].qty=this.value">
-      <input type="number" placeholder="Price" value="${it.price||''}" onchange="_guideFormItems[${i}].price=this.value">
-      <button type="button" class="icon-btn" onclick="removeGuideItemRow(${i})">✕</button>
+    <div class="mat-item-card">
+      <div class="mat-item-grid">
+        <div><label>Category</label><input placeholder="e.g. Seeds, Fertilizer" value="${escapeHtml(it.category||'')}" onchange="_guideFormItems[${i}].category=this.value"></div>
+        <div><label>Product / Chemical Name</label><input placeholder="e.g. Hazera Neptune F1" value="${escapeHtml(it.product||'')}" onchange="_guideFormItems[${i}].product=this.value"></div>
+      </div>
+      <div style="margin-bottom:8px;"><label style="display:block; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:3px;">Function / Purpose</label><input style="width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; box-sizing:border-box;" placeholder="e.g. Primary crop high-yield hybrid seed" value="${escapeHtml(it.purpose||'')}" onchange="_guideFormItems[${i}].purpose=this.value"></div>
+      <div class="mat-item-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><label>Quantity Required</label><input placeholder="e.g. 1 kg" value="${escapeHtml(it.quantity||'')}" onchange="_guideFormItems[${i}].quantity=this.value"></div>
+        <div><label>Est. Unit Price</label><input placeholder="e.g. KSh 42,500–45,500/kg" value="${escapeHtml(it.unitPrice||'')}" onchange="_guideFormItems[${i}].unitPrice=this.value"></div>
+        <div><label>Est. Total Cost</label><input placeholder="e.g. KSh 42,500–45,500" value="${escapeHtml(it.totalCost||'')}" onchange="_guideFormItems[${i}].totalCost=this.value"></div>
+      </div>
+      <div class="mat-item-remove"><button type="button" class="icon-btn" style="color:var(--danger);" onclick="removeGuideItemRow(${i})">Remove item</button></div>
     </div>
   `).join('') : `<div style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;">No items added yet.</div>`);
 }
-function addGuideItemRow(){ _guideFormItems.push({name:'', qty:'', price:''}); renderGuideItemRows(); }
+function addGuideItemRow(){ _guideFormItems.push({category:'', product:'', purpose:'', quantity:'', unitPrice:'', totalCost:''}); renderGuideItemRows(); }
 function removeGuideItemRow(i){ _guideFormItems.splice(i,1); renderGuideItemRows(); }
 
 function openGuideModal(guideId){
@@ -2102,17 +2132,19 @@ function openGuideModal(guideId){
       <textarea id="g-body" style="min-height:180px;" placeholder="Write the full guide here. Start a line with '## ' for a heading, and '- ' for a key point.">${escapeHtml(existing?.body||'')}</textarea>
       <div style="font-size:11px; color:var(--ink-soft); margin-top:4px;">Tip: "## Land preparation" becomes a heading. "- Space rows 20cm apart" becomes a tick-marked point.</div>
     </div>
+    <div class="field"><label>Items table intro — optional</label><textarea id="g-mat-intro" style="min-height:60px;" placeholder="e.g. Here is the itemized list of seeds, chemicals, fertilizers, and additives required for the entire production cycle...">${escapeHtml(existing?.materialsIntro||'')}</textarea></div>
     <div class="field">
-      <label>Items used (optional)</label>
+      <label>Items used</label>
       <div id="guideItemsRows"></div>
       <button type="button" class="btn secondary small" onclick="addGuideItemRow()">+ Add item</button>
     </div>
+    <div class="field"><label>Estimated Total Input Investment — optional</label><input id="g-mat-total" value="${escapeHtml(existing?.materialsTotal||'')}" placeholder="e.g. KSh 129,250 – KSh 143,585"></div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
       <button class="btn" onclick="saveGuide(${existing ? `'${guideId}'` : 'null'})">${existing ? 'Save changes' : 'Publish guide'}</button>
     </div>
   `;
-  openModal();
+  openModal('600px');
   renderGuideItemRows();
 }
 async function saveGuide(guideId){
@@ -2122,12 +2154,12 @@ async function saveGuide(guideId){
   const summary = document.getElementById('g-summary').value.trim();
   const body = document.getElementById('g-body').value.trim();
   const imageUrl = document.getElementById('g-image').value.trim();
-  const items = _guideFormItems
-    .filter(it=>it.name && it.name.trim())
-    .map(it=>({name:it.name.trim(), qty:Number(it.qty)||0, price:Number(it.price)||0}));
+  const materialsIntro = document.getElementById('g-mat-intro').value.trim();
+  const materialsTotal = document.getElementById('g-mat-total').value.trim();
+  const items = _guideFormItems.filter(it=>(it.product && it.product.trim()) || (it.category && it.category.trim()));
   if(!cropType || !title || !body){ showToast('Fill in crop, title, and the guide text'); return; }
   try{
-    const data = {cropType, title, summary, body, imageUrl, items, updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+    const data = {cropType, title, summary, body, imageUrl, items, materialsIntro, materialsTotal, updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
     if(guideId){
       await db.collection('guides').doc(guideId).update(data);
     } else {
