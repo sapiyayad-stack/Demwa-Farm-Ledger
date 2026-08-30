@@ -32,6 +32,8 @@
     --growth-wash:#E3E9D8;
     --gold:#C08A2E;
     --gold-wash:#F3E6C9;
+    --poultry:#A9622A;
+    --poultry-wash:#F3E4D2;
     --danger:#A23B2E;
     --radius:10px;
   }
@@ -95,6 +97,7 @@
   .card.water{border-left:3px solid var(--water);}
   .card.growth{border-left:3px solid var(--growth);}
   .card.gold{border-left:3px solid var(--gold);}
+  .card.poultry{border-left:3px solid var(--poultry);}
 
   section{margin-bottom:36px;}
   .section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
@@ -371,6 +374,7 @@
       <button data-tab="dashboard" class="active"><span class="dot"></span>Dashboard</button>
       <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
       <button data-tab="water"><span class="dot"></span>Water Records</button>
+      <button data-tab="poultry"><span class="dot"></span>Poultry</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
@@ -461,6 +465,32 @@
       </section>
 
       <div class="cust-grid" id="custList"></div>
+    </div>
+
+    <!-- POULTRY -->
+    <div id="tab-poultry" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Poultry</h1>
+          <p>Track each flock from arrival to sale — feed, mortality, health costs and income, per batch.</p>
+        </div>
+        <button class="btn" id="btnNewPoultryBatch" onclick="openPoultryBatchModal()">+ New flock</button>
+      </div>
+      <div class="cards" id="poultryCards"></div>
+
+      <section>
+        <div class="section-head">
+          <h2>Farm-wide poultry costs</h2>
+          <button class="btn secondary small" id="btnAddPoultryCost" onclick="openPoultryCostModal()">+ Add cost</button>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Housing, equipment, and labour costs that apply across all your flocks, not tied to one specific batch.</p>
+        <div id="poultryCostsList"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Flocks</h2></div>
+        <div id="poultryBatchList"></div>
+      </section>
     </div>
 
     <!-- REPORTS -->
@@ -686,6 +716,8 @@ async function resolveAndShowApp(user){
   document.getElementById('btnNewBatch').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnNewCustomer').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnInvite').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnNewPoultryBatch').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnAddPoultryCost').style.display = isOwner() ? '' : 'none';
   await loadFarmData();
   document.getElementById('farmNameLabel').textContent = currentFarmName || 'Your farm';
   renderAll();
@@ -710,17 +742,19 @@ async function loadFarmData(){
     batches = data.batches || [];
     customers = data.customers || [];
     waterCosts = data.waterCosts || [];
+    poultryBatches = data.poultryBatches || [];
+    poultryCosts = data.poultryCosts || [];
     currentFarmName = data.farmName || 'My Farm';
   } catch(e){
     console.error('load failed', e);
     showToast('Could not load your data — check your connection');
-    batches = []; customers = []; waterCosts = [];
+    batches = []; customers = []; waterCosts = []; poultryBatches = []; poultryCosts = [];
   }
 }
 async function saveFarmData(){
   if(!farmDocRef) return;
   if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return; }
-  try{ await farmDocRef.set({batches, customers, waterCosts}, {merge:true}); }
+  try{ await farmDocRef.set({batches, customers, waterCosts, poultryBatches, poultryCosts}, {merge:true}); }
   catch(e){ console.error('save failed', e); showToast('Could not save — will retry once you\'re back online'); }
 }
 /* storeSet('batches', batches) / storeSet('customers', customers) calls throughout
@@ -734,6 +768,9 @@ let waterCosts = []; // costs specific to running the water supply business itse
                       // kept separate from per-batch crop costs, so the two sides
                       // of the farm stay independently trackable but can still be
                       // consolidated into one true farm-wide profit figure.
+let poultryBatches = []; // each flock, mirroring the crop batch pattern
+let poultryCosts = [];   // farm-wide poultry costs (housing, equipment, labour) —
+                          // not tied to one specific flock, same pattern as waterCosts
 
 const STAGE_DEFS = [
   {key:'seedling', label:'Seedling\nPurchase'},
@@ -769,6 +806,7 @@ function renderAll(){
   renderDashboard();
   renderBatches();
   renderWater();
+  renderPoultry();
 }
 
 /* ---------------- Calculations ---------------- */
@@ -862,10 +900,12 @@ function goTo(tab){
   document.getElementById('tab-dashboard').style.display = tab==='dashboard' ? 'block':'none';
   document.getElementById('tab-batches').style.display = tab==='batches' ? 'block':'none';
   document.getElementById('tab-water').style.display = tab==='water' ? 'block':'none';
+  document.getElementById('tab-poultry').style.display = tab==='poultry' ? 'block':'none';
   document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
   document.getElementById('tab-guides').style.display = tab==='guides' ? 'block':'none';
   if(tab==='reports') renderReports();
   if(tab==='guides') renderGuidesTab();
+  if(tab==='poultry') renderPoultry();
 }
 document.getElementById('nav').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-tab]');
@@ -1774,12 +1814,16 @@ function renderReports(){
   const waterTotals = customers.reduce((acc,c)=>{ const t=customerTotals(c); acc.billed+=t.billed; acc.paid+=t.paid; acc.balance+=t.balance; return acc; },{billed:0,paid:0,balance:0});
   const waterCostsSum = waterCostsTotal();
   const waterProfit = waterTotals.billed - waterCostsSum;
-  const netBusiness = cropProfit + waterProfit;
+  const poultryTotalCost = poultryBatches.reduce((s,b)=>s+poultryBatchCost(b),0) + poultryCostsTotal();
+  const poultryTotalRevenue = poultryBatches.reduce((s,b)=>s+poultryRevenue(b),0);
+  const poultryTotalProfit = poultryTotalRevenue - poultryTotalCost;
+  const netBusiness = cropProfit + waterProfit + poultryTotalProfit;
   const depositsHeld = depositsHeldTotal();
 
   document.getElementById('reportCards').innerHTML = `
     <div class="card onion"><div class="label">Crop profit / loss</div><div class="value" style="color:${cropProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(cropProfit)}</div></div>
     <div class="card water"><div class="label">Water profit (billed − water costs)</div><div class="value" style="color:${waterProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(waterProfit)}</div></div>
+    <div class="card poultry"><div class="label">Poultry profit / loss</div><div class="value" style="color:${poultryTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(poultryTotalProfit)}</div></div>
     <div class="card gold"><div class="label">Consolidated farm net profit</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
     <div class="card growth"><div class="label">Deposits held (excluded above)</div><div class="value">${fmt(depositsHeld)}</div></div>
   `;
@@ -2323,6 +2367,472 @@ async function submitSupportMessage(){
     console.error(e);
     showToast('Could not send — check your connection and try again');
   }
+}
+
+/* ==================== POULTRY MANAGEMENT ==================== */
+const BIRD_TYPES = ['Layer','Broiler','Kienyeji','Kienyeji Improved','Turkey','Duck','Other'];
+const POULTRY_COST_CATS = ['Housing & Equipment','Farm Operations & Overhead','Labour & Staffing','Other'];
+
+function blankPoultryBatch(){
+  return {
+    id: uid(), birdType:'Broiler', breed:'', quantityStarted:'', startDate: todayISO(), source:'', notes:'',
+    avgWeightSoldKg:'',
+    feedLog:[], mortalityLog:[], vetLog:[], salesLog:[], costs:[],
+    openInUI:true
+  };
+}
+
+/* ---- Calculations ---- */
+function poultryBatchDeaths(b){ return (b.mortalityLog||[]).reduce((s,m)=>s+Number(m.deaths||0),0); }
+function poultryBatchSoldBirds(b){ return (b.salesLog||[]).filter(s=>s.saleType==='Bird Sale').reduce((s,x)=>s+Number(x.qty||0),0); }
+function poultryBatchRemaining(b){ return Number(b.quantityStarted||0) - poultryBatchDeaths(b) - poultryBatchSoldBirds(b); }
+function poultryMortalityRate(b){ const started=Number(b.quantityStarted||0); return started>0 ? (poultryBatchDeaths(b)/started*100) : 0; }
+function poultryFeedKg(b){ return (b.feedLog||[]).reduce((s,f)=>s+Number(f.amountKg||0),0); }
+function poultryFeedCost(b){ return (b.feedLog||[]).reduce((s,f)=>s+Number(f.cost||0),0); }
+function poultryVetCost(b){ return (b.vetLog||[]).reduce((s,v)=>s+Number(v.cost||0),0); }
+function poultryOtherCost(b){ return (b.costs||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+function poultryBatchCost(b){ return poultryFeedCost(b)+poultryVetCost(b)+poultryOtherCost(b); }
+function poultryRevenue(b){ return (b.salesLog||[]).reduce((s,x)=>s+Number(x.qty||0)*Number(x.unitPrice||0),0); }
+function poultryProfit(b){ return poultryRevenue(b) - poultryBatchCost(b); }
+function poultryFCR(b){
+  const soldBirds = poultryBatchSoldBirds(b);
+  const avgW = Number(b.avgWeightSoldKg||0);
+  if(soldBirds>0 && avgW>0) return poultryFeedKg(b) / (soldBirds*avgW);
+  return null;
+}
+function poultryBatchStatus(b){
+  const started = Number(b.quantityStarted||0);
+  return (started>0 && poultryBatchRemaining(b)<=0) ? 'closed' : 'active';
+}
+function poultryCostsTotal(){ return (poultryCosts||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+
+/* ---- Generic read-only log table (used by feed/mortality/vet/sales/other-cost logs) ---- */
+function renderLogTable(rows, columns, batchId, deleteFn){
+  if(!rows || !rows.length) return `<div class="empty" style="padding:10px 0;">None logged yet.</div>`;
+  return `<table><thead><tr>${columns.map(c=>`<th ${c.numeric?'class="num"':''}>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${rows.slice().reverse().map(r=>`<tr>${columns.map(c=>{
+      const val = c.format ? c.format(r[c.key], r) : escapeHtml(String(r[c.key]||''));
+      return `<td ${c.numeric?'class="num"':''}>${val}</td>`;
+    }).join('')}<td><button class="icon-btn" onclick="event.stopPropagation(); ${deleteFn}('${batchId}','${r.id}')">✕</button></td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+/* ---- Farm-wide poultry costs (housing, overhead, labour) ---- */
+function renderPoultryCostsList(){
+  const el = document.getElementById('poultryCostsList');
+  if(!poultryCosts.length){ el.innerHTML = `<div class="empty">No farm-wide poultry costs logged yet.</div>`; return; }
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    ${poultryCosts.slice().reverse().map(c=>`
+      <tr>
+        <td>${c.date||''}</td>
+        <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
+        <td>${escapeHtml(c.description||'')}</td>
+        <td class="num">${fmt(c.amount)}</td>
+        <td>
+          <button class="icon-btn" onclick="openPoultryCostModal('${c.id}')">Edit</button>
+          <button class="icon-btn" onclick="deletePoultryCost('${c.id}')">✕</button>
+        </td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+    <div class="summary-row"><div class="item">Total farm-wide poultry costs: <b>${fmt(poultryCostsTotal())}</b></div></div>
+  `;
+}
+function openPoultryCostModal(costId){
+  if(!requireOwner()) return;
+  const existing = costId ? poultryCosts.find(c=>c.id===costId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing?'Edit':'Add'} poultry cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Category</label>
+        <select id="pc-cat">${POULTRY_COST_CATS.map(c=>`<option ${existing&&existing.category===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Date</label><input id="pc-date" type="date" value="${existing?existing.date:todayISO()}"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="pc-desc" value="${escapeHtml(existing?.description||'')}" placeholder="e.g. Gas brooder"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="pc-amount" type="number" step="0.01" value="${existing?existing.amount:''}"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryCost(${existing?`'${costId}'`:'null'})">${existing?'Save changes':'Add cost'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryCost(costId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('pc-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const entry = {
+    id: costId||uid(),
+    category: document.getElementById('pc-cat').value,
+    date: document.getElementById('pc-date').value,
+    description: document.getElementById('pc-desc').value.trim(),
+    amount
+  };
+  if(costId){ const idx=poultryCosts.findIndex(c=>c.id===costId); if(idx>-1) poultryCosts[idx]=entry; }
+  else poultryCosts.push(entry);
+  await storeSet('poultryCosts', poultryCosts);
+  closeModal(); renderAll(); showToast(costId?'Cost updated':'Cost added');
+}
+async function deletePoultryCost(id){
+  if(!requireOwner()) return;
+  poultryCosts = poultryCosts.filter(c=>c.id!==id);
+  await storeSet('poultryCosts', poultryCosts);
+  renderAll();
+}
+
+/* ---- Flock (batch) list ---- */
+function renderPoultry(){
+  const activeFlocks = poultryBatches.filter(b=>poultryBatchStatus(b)==='active');
+  const totalCost = poultryBatches.reduce((s,b)=>s+poultryBatchCost(b),0);
+  const totalRevenue = poultryBatches.reduce((s,b)=>s+poultryRevenue(b),0);
+  const totalProfit = totalRevenue - totalCost;
+  document.getElementById('poultryCards').innerHTML = `
+    <div class="card poultry"><div class="label">Active flocks</div><div class="value">${activeFlocks.length}</div></div>
+    <div class="card growth"><div class="label">Total flock cost</div><div class="value">${fmt(totalCost)}</div></div>
+    <div class="card gold"><div class="label">Poultry profit / loss</div><div class="value" style="color:${totalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(totalProfit)}</div></div>
+    <div class="card water"><div class="label">Farm-wide poultry costs</div><div class="value">${fmt(poultryCostsTotal())}</div></div>
+  `;
+  renderPoultryCostsList();
+  renderPoultryBatches();
+}
+function renderPoultryBatches(){
+  const el = document.getElementById('poultryBatchList');
+  if(!poultryBatches.length){ el.innerHTML = `<div class="empty">No flocks yet. Click <b>+ New flock</b> to log your first batch of birds.</div>`; return; }
+  el.innerHTML = poultryBatches.slice().reverse().map(b=>{
+    const cost = poultryBatchCost(b), revenue = poultryRevenue(b), profit = revenue-cost;
+    const status = poultryBatchStatus(b);
+    const remaining = poultryBatchRemaining(b);
+    const mortRate = poultryMortalityRate(b);
+    const fcr = poultryFCR(b);
+    return `
+    <div class="batch">
+      <div class="batch-head" onclick="togglePoultryBatch('${b.id}')">
+        <div>
+          <div class="batch-title">${escapeHtml(b.birdType)}${b.breed?(' — '+escapeHtml(b.breed)):''} <span class="badge ${status==='active'?'active':'harvested'}">${status}</span></div>
+          <div class="batch-meta">${b.quantityStarted||0} started · ${remaining} remaining · started ${b.startDate||'—'} · ${mortRate.toFixed(1)}% mortality</div>
+        </div>
+        <div class="batch-stats">
+          <div class="p">${fmt(cost)} cost</div>
+          <div class="p ${profit>=0?'pos':'neg'}">${fmt(profit)} profit</div>
+        </div>
+      </div>
+      <div class="batch-body ${b.openInUI?'open':''}" id="poultry-body-${b.id}">
+        <div class="summary-row" style="margin-top:14px;">
+          <div class="item">Feed used: <b>${poultryFeedKg(b).toFixed(1)} kg</b></div>
+          <div class="item">Feed cost: <b>${fmt(poultryFeedCost(b))}</b></div>
+          ${fcr!==null ? `<div class="item">Est. FCR: <b>${fcr.toFixed(2)}</b></div>` : ''}
+          <div class="item">Deaths: <b>${poultryBatchDeaths(b)}</b></div>
+          <div class="item">Vet cost: <b>${fmt(poultryVetCost(b))}</b></div>
+        </div>
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Feed log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPoultryFeedModal('${b.id}')">+ Add feed entry</button></div>
+        ${renderLogTable(b.feedLog, [
+          {key:'date',label:'Date'},{key:'feedType',label:'Feed type'},
+          {key:'amountKg',label:'Amount (kg)',numeric:true},{key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePoultryFeed')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Mortality log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPoultryMortalityModal('${b.id}')">+ Add record</button></div>
+        ${renderLogTable(b.mortalityLog, [
+          {key:'date',label:'Date'},{key:'deaths',label:'Deaths',numeric:true},{key:'cause',label:'Cause'}
+        ], b.id, 'deletePoultryMortality')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Veterinary &amp; health</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPoultryVetModal('${b.id}')">+ Add record</button></div>
+        ${renderLogTable(b.vetLog, [
+          {key:'date',label:'Date'},{key:'treatment',label:'Treatment / Service'},
+          {key:'vetSupplier',label:'Vet / Supplier'},{key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePoultryVet')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Sales</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPoultrySaleModal('${b.id}')">+ Add sale</button></div>
+        ${renderLogTable(b.salesLog, [
+          {key:'date',label:'Date'},{key:'saleType',label:'Type'},{key:'qty',label:'Qty',numeric:true},
+          {key:'unitPrice',label:'Unit price',numeric:true,format:v=>fmt(v)},{key:'buyer',label:'Buyer'},
+          {key:'revenue',label:'Revenue',numeric:true,format:(v,row)=>fmt(Number(row.qty||0)*Number(row.unitPrice||0))},
+          {key:'paid',label:'Status',format:v=>v?'Paid':'Pending'}
+        ], b.id, 'deletePoultrySale')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Other flock costs</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPoultryOtherCostModal('${b.id}')">+ Add cost</button></div>
+        ${renderLogTable(b.costs, [
+          {key:'date',label:'Date'},{key:'description',label:'Description'},{key:'amount',label:'Amount',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePoultryOtherCost')}
+
+        <div style="margin-top:14px; text-align:right;">
+          <button class="icon-btn" onclick="event.stopPropagation(); openPoultryBatchModal('${b.id}')">Edit flock details</button>
+          <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deletePoultryBatch('${b.id}')">Delete flock</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function togglePoultryBatch(id){
+  const b = poultryBatches.find(x=>x.id===id);
+  b.openInUI = !b.openInUI;
+  renderPoultryBatches();
+}
+
+/* ---- Flock create/edit/delete ---- */
+function openPoultryBatchModal(batchId){
+  if(!requireOwner()) return;
+  const existing = batchId ? poultryBatches.find(b=>b.id===batchId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing ? 'Edit flock' : 'New flock'}</h3>
+    <div class="field-row">
+      <div class="field"><label>Bird type</label>
+        <select id="pb-type">${BIRD_TYPES.map(t=>`<option ${existing&&existing.birdType===t?'selected':''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Breed / variety</label><input id="pb-breed" value="${escapeHtml(existing?.breed||'')}" placeholder="e.g. Hazera, Kuroiler"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Quantity started</label><input id="pb-qty" type="number" value="${existing?existing.quantityStarted:''}" placeholder="e.g. 1000"></div>
+      <div class="field"><label>Start date</label><input id="pb-date" type="date" value="${existing?existing.startDate:todayISO()}"></div>
+    </div>
+    <div class="field"><label>Source / hatchery</label><input id="pb-source" value="${escapeHtml(existing?.source||'')}" placeholder="e.g. Kenchic Hatchery"></div>
+    <div class="field"><label>Average weight sold per bird (kg) — optional, enables FCR</label><input id="pb-avgweight" type="number" step="0.01" value="${existing?existing.avgWeightSoldKg:''}" placeholder="e.g. 2.1"></div>
+    <div class="field"><label>Notes</label><textarea id="pb-notes">${escapeHtml(existing?.notes||'')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryBatch(${existing?`'${batchId}'`:'null'})">${existing?'Save changes':'Create flock'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryBatch(batchId){
+  if(!requireOwner()) return;
+  const birdType = document.getElementById('pb-type').value;
+  const qty = document.getElementById('pb-qty').value;
+  if(!qty){ showToast('Enter how many birds started this flock'); return; }
+  if(batchId){
+    const b = poultryBatches.find(x=>x.id===batchId);
+    b.birdType = birdType;
+    b.breed = document.getElementById('pb-breed').value.trim();
+    b.quantityStarted = qty;
+    b.startDate = document.getElementById('pb-date').value;
+    b.source = document.getElementById('pb-source').value.trim();
+    b.avgWeightSoldKg = document.getElementById('pb-avgweight').value;
+    b.notes = document.getElementById('pb-notes').value.trim();
+  } else {
+    const b = blankPoultryBatch();
+    b.birdType = birdType;
+    b.breed = document.getElementById('pb-breed').value.trim();
+    b.quantityStarted = qty;
+    b.startDate = document.getElementById('pb-date').value;
+    b.source = document.getElementById('pb-source').value.trim();
+    b.avgWeightSoldKg = document.getElementById('pb-avgweight').value;
+    b.notes = document.getElementById('pb-notes').value.trim();
+    poultryBatches.push(b);
+  }
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast(batchId?'Flock updated':'Flock created');
+}
+async function deletePoultryBatch(id){
+  if(!requireOwner()) return;
+  if(!confirm('Delete this flock and all its feed, mortality, vet, and sales records? This cannot be undone.')) return;
+  poultryBatches = poultryBatches.filter(b=>b.id!==id);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+  showToast('Flock deleted');
+}
+
+/* ---- Feed log ---- */
+function openPoultryFeedModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add feed entry</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pf-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Feed type</label><input id="pf-type" placeholder="e.g. Broiler Starter"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Amount fed (kg)</label><input id="pf-amount" type="number" step="0.1"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="pf-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryFeed('${batchId}')">Add entry</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryFeed(batchId){
+  if(!requireOwner()) return;
+  const amountKg = Number(document.getElementById('pf-amount').value||0);
+  if(!amountKg){ showToast('Enter the amount fed'); return; }
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.feedLog.push({id:uid(), date:document.getElementById('pf-date').value, feedType:document.getElementById('pf-type').value.trim(), amountKg, cost:Number(document.getElementById('pf-cost').value||0)});
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast('Feed entry added');
+}
+async function deletePoultryFeed(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.feedLog = b.feedLog.filter(f=>f.id!==entryId);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+}
+
+/* ---- Mortality log ---- */
+function openPoultryMortalityModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add mortality record</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pm-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Deaths</label><input id="pm-deaths" type="number"></div>
+    </div>
+    <div class="field"><label>Cause</label><input id="pm-cause" placeholder="e.g. Disease, Predator, Transport stress, Unknown"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryMortality('${batchId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryMortality(batchId){
+  if(!requireOwner()) return;
+  const deaths = Number(document.getElementById('pm-deaths').value||0);
+  if(!deaths){ showToast('Enter how many birds died'); return; }
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.mortalityLog.push({id:uid(), date:document.getElementById('pm-date').value, deaths, cause:document.getElementById('pm-cause').value.trim()});
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast('Mortality recorded');
+}
+async function deletePoultryMortality(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.mortalityLog = b.mortalityLog.filter(m=>m.id!==entryId);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+}
+
+/* ---- Vet & health log ---- */
+function openPoultryVetModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add veterinary / health record</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pv-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="pv-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Treatment / service</label><input id="pv-treatment" placeholder="e.g. Newcastle vaccination"></div>
+    <div class="field"><label>Vet / supplier</label><input id="pv-supplier" placeholder="e.g. Dr. Kamau, AgroVet Kenya"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryVet('${batchId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryVet(batchId){
+  if(!requireOwner()) return;
+  const cost = Number(document.getElementById('pv-cost').value||0);
+  const treatment = document.getElementById('pv-treatment').value.trim();
+  if(!treatment){ showToast('Enter the treatment or service'); return; }
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.vetLog.push({id:uid(), date:document.getElementById('pv-date').value, treatment, vetSupplier:document.getElementById('pv-supplier').value.trim(), cost});
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast('Health record added');
+}
+async function deletePoultryVet(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.vetLog = b.vetLog.filter(v=>v.id!==entryId);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+}
+
+/* ---- Sales log ---- */
+function openPoultrySaleModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add sale</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="ps-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Sale type</label>
+        <select id="ps-type"><option>Egg Sale</option><option>Bird Sale</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Quantity (trays / birds / kg)</label><input id="ps-qty" type="number" step="0.1"></div>
+      <div class="field"><label>Unit price (${CURRENCY})</label><input id="ps-price" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Buyer / customer</label><input id="ps-buyer" placeholder="e.g. Nairobi Butchery"></div>
+    <div class="field"><label><input type="checkbox" id="ps-paid" style="width:auto; display:inline-block; margin-right:6px;">Already paid</label></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultrySale('${batchId}')">Add sale</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultrySale(batchId){
+  if(!requireOwner()) return;
+  const qty = Number(document.getElementById('ps-qty').value||0);
+  if(!qty){ showToast('Enter a quantity'); return; }
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.salesLog.push({
+    id:uid(), date:document.getElementById('ps-date').value, saleType:document.getElementById('ps-type').value,
+    qty, unitPrice:Number(document.getElementById('ps-price').value||0),
+    buyer:document.getElementById('ps-buyer').value.trim(), paid:document.getElementById('ps-paid').checked
+  });
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast('Sale added');
+}
+async function deletePoultrySale(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.salesLog = b.salesLog.filter(s=>s.id!==entryId);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+}
+
+/* ---- Other flock-specific costs ---- */
+function openPoultryOtherCostModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add other flock cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="po-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Amount (${CURRENCY})</label><input id="po-amount" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="po-desc" placeholder="e.g. Litter / sawdust"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePoultryOtherCost('${batchId}')">Add cost</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePoultryOtherCost(batchId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('po-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.costs.push({id:uid(), date:document.getElementById('po-date').value, description:document.getElementById('po-desc').value.trim(), amount});
+  await storeSet('poultryBatches', poultryBatches);
+  closeModal(); renderAll(); showToast('Cost added');
+}
+async function deletePoultryOtherCost(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = poultryBatches.find(x=>x.id===batchId);
+  b.costs = b.costs.filter(c=>c.id!==entryId);
+  await storeSet('poultryBatches', poultryBatches);
+  renderAll();
 }
 
 /* ---------------- Modal plumbing ---------------- */
