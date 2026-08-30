@@ -739,7 +739,6 @@ const STAGE_DEFS = [
   {key:'seedling', label:'Seedling\nPurchase'},
   {key:'nursery', label:'Nursery'},
   {key:'transplant', label:'Transplanting'},
-  {key:'growth', label:'Growth &\nMaintenance'},
   {key:'harvest', label:'Harvest'}
 ];
 const COST_CATS = ['Seeds','Nursery Inputs','Labour','Fertilizer','Foliar Feeding','Pesticide/Fungicide','Insecticide','Adjuvant','Anti-Transpirant','Water','Transport','Other'];
@@ -844,7 +843,7 @@ function renderDashboard(){
       <div class="batch-head" onclick="goTo('batches')">
         <div>
           <div class="batch-title">${escapeHtml(b.cropType)} — ${escapeHtml(b.variety||'')}</div>
-          <div class="batch-meta">${stagesCompleted(b)}/5 stages complete · started ${b.startDate||'—'}</div>
+          <div class="batch-meta">${stagesCompleted(b)}/${STAGE_DEFS.length} stages complete · started ${b.startDate||'—'}</div>
         </div>
         <div class="batch-stats"><div class="p">${fmt(batchCost(b))} spent</div></div>
       </div>
@@ -883,7 +882,6 @@ function blankBatch(){
       seedling:{done:false, date:'', notes:''},
       nursery:{done:false, dateStart:'', dateReady:'', notes:''},
       transplant:{done:false, date:'', notes:''},
-      growth:{done:false, notes:''},
       harvest:{done:false, date:'', yieldKg:'', pricePerKg:'', notes:''}
     },
     costs: [],
@@ -908,12 +906,6 @@ const ONION_STAGE_TIPS = {
     'Transplant in the cool of the evening or on an overcast day to reduce shock.',
     'Space bulbs properly for your variety — overcrowding is a common cause of small bulbs.',
     'Set drip lines and check emitter spacing matches row spacing before planting, not after.'
-  ],
-  growth: [
-    'Split fertilizer applications rather than one heavy dose — matches uptake and cuts waste.',
-    'Scout for thrips and downy mildew weekly; early treatment is far cheaper than a late rescue spray.',
-    'Keep drip laterals flushed to avoid clogging, especially with borehole water that carries fine sediment.',
-    'Log every input as a cost entry as you apply it — it is much harder to reconstruct later.'
   ],
   harvest: [
     'Stop irrigation 1–2 weeks before harvest to help necks cure and reduce storage rot.',
@@ -942,12 +934,6 @@ const GENERIC_STAGE_TIPS = {
     'Space plants according to the variety\'s mature size; overcrowding is a common yield-limiter.',
     'Check your irrigation layout matches the new row spacing before you finish planting.'
   ],
-  growth: [
-    'Split fertilizer applications to match the crop\'s uptake instead of one heavy dose.',
-    'Scout for pests and disease on a regular schedule; early treatment is cheaper than a late rescue.',
-    'Keep irrigation equipment clear of clogs, especially if your water source carries sediment.',
-    'Log every input as a cost entry as you apply it — much harder to reconstruct later.'
-  ],
   harvest: [
     'Time the harvest to the crop\'s maturity signs rather than the calendar alone.',
     'Handle and store the harvest in a way appropriate to the crop to reduce post-harvest loss.',
@@ -975,7 +961,7 @@ function renderBatches(){
       <div class="batch-head" onclick="toggleBatch('${b.id}')">
         <div>
           <div class="batch-title">${escapeHtml(b.cropType)}${b.variety?(' — '+escapeHtml(b.variety)):''} <span class="badge ${status}">${status}</span></div>
-          <div class="batch-meta">${b.season? escapeHtml(b.season)+' · ':''}${b.areaAcres? b.areaAcres+' acres · ':''}started ${b.startDate||'—'} · ${done}/5 stages complete</div>
+          <div class="batch-meta">${b.season? escapeHtml(b.season)+' · ':''}${b.areaAcres? b.areaAcres+' acres · ':''}started ${b.startDate||'—'} · ${done}/${STAGE_DEFS.length} stages complete</div>
         </div>
         <div class="batch-stats">
           <div class="p">${fmt(cost)} cost</div>
