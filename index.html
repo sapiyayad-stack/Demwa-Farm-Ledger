@@ -34,6 +34,8 @@
     --gold-wash:#F3E6C9;
     --poultry:#A9622A;
     --poultry-wash:#F3E4D2;
+    --dairy:#3E6E8E;
+    --dairy-wash:#DDE9F0;
     --danger:#A23B2E;
     --radius:10px;
   }
@@ -98,6 +100,7 @@
   .card.growth{border-left:3px solid var(--growth);}
   .card.gold{border-left:3px solid var(--gold);}
   .card.poultry{border-left:3px solid var(--poultry);}
+  .card.dairy{border-left:3px solid var(--dairy);}
 
   section{margin-bottom:36px;}
   .section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
@@ -375,6 +378,7 @@
       <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
       <button data-tab="water"><span class="dot"></span>Water Records</button>
       <button data-tab="poultry"><span class="dot"></span>Poultry</button>
+      <button data-tab="dairy"><span class="dot"></span>Dairy</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
@@ -490,6 +494,41 @@
       <section>
         <div class="section-head"><h2>Flocks</h2></div>
         <div id="poultryBatchList"></div>
+      </section>
+    </div>
+
+    <!-- DAIRY -->
+    <div id="tab-dairy" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Dairy</h1>
+          <p>Each cow, tracked individually by ear tag — lactation, breeding, calving, health, and milk yield over her whole life on the farm.</p>
+        </div>
+        <button class="btn" id="btnNewDairyAnimal" onclick="openDairyAnimalModal()">+ New animal</button>
+      </div>
+      <div class="cards" id="dairyCards"></div>
+
+      <section>
+        <div class="section-head">
+          <h2>Milk sales</h2>
+          <button class="btn secondary small" id="btnAddMilkSale" onclick="openMilkSaleModal()">+ Add sale</button>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Milk is pooled from the whole herd and sold together — logged here rather than per animal.</p>
+        <div id="milkSalesList"></div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Farm-wide dairy costs</h2>
+          <button class="btn secondary small" id="btnAddDairyCost" onclick="openDairyCostModal()">+ Add cost</button>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Feed, housing, milking equipment, and labour costs that apply across the whole herd, not one specific animal.</p>
+        <div id="dairyCostsList"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Herd</h2></div>
+        <div id="dairyAnimalList"></div>
       </section>
     </div>
 
@@ -718,6 +757,9 @@ async function resolveAndShowApp(user){
   document.getElementById('btnInvite').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnNewPoultryBatch').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnAddPoultryCost').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnNewDairyAnimal').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnAddMilkSale').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnAddDairyCost').style.display = isOwner() ? '' : 'none';
   await loadFarmData();
   document.getElementById('farmNameLabel').textContent = currentFarmName || 'Your farm';
   renderAll();
@@ -744,17 +786,21 @@ async function loadFarmData(){
     waterCosts = data.waterCosts || [];
     poultryBatches = data.poultryBatches || [];
     poultryCosts = data.poultryCosts || [];
+    dairyAnimals = data.dairyAnimals || [];
+    dairyCosts = data.dairyCosts || [];
+    dairyMilkSales = data.dairyMilkSales || [];
     currentFarmName = data.farmName || 'My Farm';
   } catch(e){
     console.error('load failed', e);
     showToast('Could not load your data — check your connection');
     batches = []; customers = []; waterCosts = []; poultryBatches = []; poultryCosts = [];
+    dairyAnimals = []; dairyCosts = []; dairyMilkSales = [];
   }
 }
 async function saveFarmData(){
   if(!farmDocRef) return;
   if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return; }
-  try{ await farmDocRef.set({batches, customers, waterCosts, poultryBatches, poultryCosts}, {merge:true}); }
+  try{ await farmDocRef.set({batches, customers, waterCosts, poultryBatches, poultryCosts, dairyAnimals, dairyCosts, dairyMilkSales}, {merge:true}); }
   catch(e){ console.error('save failed', e); showToast('Could not save — will retry once you\'re back online'); }
 }
 /* storeSet('batches', batches) / storeSet('customers', customers) calls throughout
@@ -771,6 +817,10 @@ let waterCosts = []; // costs specific to running the water supply business itse
 let poultryBatches = []; // each flock, mirroring the crop batch pattern
 let poultryCosts = [];   // farm-wide poultry costs (housing, equipment, labour) —
                           // not tied to one specific flock, same pattern as waterCosts
+let dairyAnimals = [];   // each cow tracked individually by ear tag — lactation,
+                          // breeding, calving, and health follow HER, not a batch
+let dairyCosts = [];     // farm-wide dairy costs (feed, housing, milking equipment, labour)
+let dairyMilkSales = []; // pooled milk sales — milk from the whole herd sold together
 
 const STAGE_DEFS = [
   {key:'seedling', label:'Seedling\nPurchase'},
@@ -807,6 +857,7 @@ function renderAll(){
   renderBatches();
   renderWater();
   renderPoultry();
+  renderDairy();
 }
 
 /* ---------------- Calculations ---------------- */
@@ -901,11 +952,13 @@ function goTo(tab){
   document.getElementById('tab-batches').style.display = tab==='batches' ? 'block':'none';
   document.getElementById('tab-water').style.display = tab==='water' ? 'block':'none';
   document.getElementById('tab-poultry').style.display = tab==='poultry' ? 'block':'none';
+  document.getElementById('tab-dairy').style.display = tab==='dairy' ? 'block':'none';
   document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
   document.getElementById('tab-guides').style.display = tab==='guides' ? 'block':'none';
   if(tab==='reports') renderReports();
   if(tab==='guides') renderGuidesTab();
   if(tab==='poultry') renderPoultry();
+  if(tab==='dairy') renderDairy();
 }
 document.getElementById('nav').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-tab]');
@@ -1817,13 +1870,15 @@ function renderReports(){
   const poultryTotalCost = poultryBatches.reduce((s,b)=>s+poultryBatchCost(b),0) + poultryCostsTotal();
   const poultryTotalRevenue = poultryBatches.reduce((s,b)=>s+poultryRevenue(b),0);
   const poultryTotalProfit = poultryTotalRevenue - poultryTotalCost;
-  const netBusiness = cropProfit + waterProfit + poultryTotalProfit;
+  const dairyTotalProfit = dairyProfitTotal();
+  const netBusiness = cropProfit + waterProfit + poultryTotalProfit + dairyTotalProfit;
   const depositsHeld = depositsHeldTotal();
 
   document.getElementById('reportCards').innerHTML = `
     <div class="card onion"><div class="label">Crop profit / loss</div><div class="value" style="color:${cropProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(cropProfit)}</div></div>
     <div class="card water"><div class="label">Water profit (billed − water costs)</div><div class="value" style="color:${waterProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(waterProfit)}</div></div>
     <div class="card poultry"><div class="label">Poultry profit / loss</div><div class="value" style="color:${poultryTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(poultryTotalProfit)}</div></div>
+    <div class="card dairy"><div class="label">Dairy profit / loss</div><div class="value" style="color:${dairyTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(dairyTotalProfit)}</div></div>
     <div class="card gold"><div class="label">Consolidated farm net profit</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
     <div class="card growth"><div class="label">Deposits held (excluded above)</div><div class="value">${fmt(depositsHeld)}</div></div>
   `;
@@ -2832,6 +2887,587 @@ async function deletePoultryOtherCost(batchId, entryId){
   const b = poultryBatches.find(x=>x.id===batchId);
   b.costs = b.costs.filter(c=>c.id!==entryId);
   await storeSet('poultryBatches', poultryBatches);
+  renderAll();
+}
+
+/* ==================== DAIRY MANAGEMENT ==================== */
+// Real dairy terminology used throughout: lactation, dry period, days in milk
+// (DIM), days open, calving interval, AI vs natural service, pregnancy
+// diagnosis (PD), body condition score (BCS), culling.
+const DAIRY_BREEDS = ['Friesian/Holstein','Ayrshire','Jersey','Guernsey','Sahiwal','Crossbreed','Other'];
+const DAIRY_STATUSES = ['Calf','Heifer','Lactating','Dry'];
+const BREEDING_TYPES = ['AI (Artificial Insemination)','Natural Service (Bull)'];
+const PD_RESULTS = ['Pending','Confirmed Pregnant','Open (Not Pregnant)','Aborted'];
+const CULL_REASONS = ['Low Production','Infertility','Disease','Old Age','Sold','Died','Other'];
+const MILK_SESSIONS = ['AM','PM','Whole Day'];
+const DAIRY_COST_CATS = ['Feed - Dairy Meal/Concentrates','Feed - Roughage (Napier/Silage/Hay)','Mineral Supplements','Housing & Equipment','Milking Equipment & Cooling','Farm Operations & Overhead','Labour & Staffing','AI/Breeding Services','Other'];
+const GESTATION_DAYS = 283; // average bovine gestation length, for expected calving date
+
+function blankDairyAnimal(){
+  return {
+    id: uid(), tagNumber:'', name:'', breed:'Friesian/Holstein', dateOfBirth:'', sex:'Female',
+    source:'', acquisitionDate: todayISO(), acquisitionCost:'', notes:'',
+    status:'Heifer', cullDate:'', cullReason:'', cullSalePrice:'',
+    milkLog:[], breedingLog:[], calvingLog:[], healthLog:[], costs:[],
+    openInUI:true
+  };
+}
+function daysBetween(d1, d2){ return Math.round((new Date(d2) - new Date(d1)) / 86400000); }
+
+/* ---- Calculations ---- */
+function dairyHealthCost(a){ return (a.healthLog||[]).reduce((s,h)=>s+Number(h.cost||0),0); }
+function dairyBreedingCost(a){ return (a.breedingLog||[]).reduce((s,b)=>s+Number(b.cost||0),0); }
+function dairyOtherCost(a){ return (a.costs||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+function dairyAnimalCost(a){ return dairyHealthCost(a)+dairyBreedingCost(a)+dairyOtherCost(a); }
+function dairyMilkYieldTotal(a){ return (a.milkLog||[]).reduce((s,m)=>s+Number(m.yieldLitres||0),0); }
+function dairyMilkDaysLogged(a){ return new Set((a.milkLog||[]).map(m=>m.date)).size; }
+function dairyAvgDailyYield(a){ const days=dairyMilkDaysLogged(a); return days>0 ? dairyMilkYieldTotal(a)/days : 0; }
+function latestCalvingDate(a){
+  const log = a.calvingLog||[];
+  if(!log.length) return null;
+  return log.slice().sort((x,y)=> new Date(y.date) - new Date(x.date))[0].date;
+}
+function lactationNumber(a){ return (a.calvingLog||[]).length; }
+function daysInMilk(a){
+  const d = latestCalvingDate(a);
+  if(!d) return null;
+  const diff = daysBetween(d, todayISO());
+  return diff>=0 ? diff : null;
+}
+function calvingIntervalDays(a){
+  const log = (a.calvingLog||[]).slice().sort((x,y)=> new Date(x.date)-new Date(y.date));
+  if(log.length<2) return null;
+  return daysBetween(log[log.length-2].date, log[log.length-1].date);
+}
+function isConfirmedPregnantSinceCalving(a){
+  const cd = latestCalvingDate(a);
+  return (a.breedingLog||[]).some(b => b.pdResult==='Confirmed Pregnant' && (!cd || new Date(b.date) >= new Date(cd)));
+}
+function daysOpen(a){
+  if(isConfirmedPregnantSinceCalving(a)) return null;
+  return daysInMilk(a);
+}
+function dairyCostsTotal(){ return (dairyCosts||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+function milkSalesRevenue(){ return (dairyMilkSales||[]).reduce((s,m)=>s+Number(m.litresSold||0)*Number(m.pricePerLitre||0),0); }
+function milkSalesLitres(){ return (dairyMilkSales||[]).reduce((s,m)=>s+Number(m.litresSold||0),0); }
+function dairyCullRevenue(){ return dairyAnimals.reduce((s,a)=> s + ((a.status==='Culled' && a.cullReason==='Sold') ? Number(a.cullSalePrice||0) : 0), 0); }
+function dairyHerdCostTotal(){ return dairyAnimals.reduce((s,a)=>s+dairyAnimalCost(a),0) + dairyCostsTotal(); }
+function dairyProfitTotal(){ return milkSalesRevenue() + dairyCullRevenue() - dairyHerdCostTotal(); }
+
+/* ---- Milk sales (pooled, farm-wide) ---- */
+function renderMilkSalesList(){
+  const el = document.getElementById('milkSalesList');
+  if(!dairyMilkSales.length){ el.innerHTML = `<div class="empty">No milk sales logged yet.</div>`; return; }
+  el.innerHTML = renderLogTable(dairyMilkSales, [
+    {key:'date',label:'Date'},{key:'litresSold',label:'Litres',numeric:true},
+    {key:'pricePerLitre',label:'Price/Litre',numeric:true,format:v=>fmt(v)},
+    {key:'buyer',label:'Buyer'},
+    {key:'revenue',label:'Revenue',numeric:true,format:(v,row)=>fmt(Number(row.litresSold||0)*Number(row.pricePerLitre||0))},
+    {key:'paid',label:'Status',format:v=>v?'Paid':'Pending'}
+  ], '', 'deleteMilkSale') + `<div class="summary-row"><div class="item">Total milk revenue: <b>${fmt(milkSalesRevenue())}</b></div><div class="item">Total litres sold: <b>${milkSalesLitres().toFixed(1)} L</b></div></div>`;
+}
+function openMilkSaleModal(){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add milk sale</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="ms-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Litres sold</label><input id="ms-litres" type="number" step="0.1"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Price per litre (${CURRENCY})</label><input id="ms-price" type="number" step="0.01"></div>
+      <div class="field"><label>Buyer</label><input id="ms-buyer" placeholder="e.g. Dairy Cooperative"></div>
+    </div>
+    <div class="field"><label><input type="checkbox" id="ms-paid" style="width:auto; display:inline-block; margin-right:6px;">Already paid</label></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveMilkSale()">Add sale</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveMilkSale(){
+  if(!requireOwner()) return;
+  const litresSold = Number(document.getElementById('ms-litres').value||0);
+  if(!litresSold){ showToast('Enter the litres sold'); return; }
+  dairyMilkSales.push({
+    id:uid(), date:document.getElementById('ms-date').value, litresSold,
+    pricePerLitre:Number(document.getElementById('ms-price').value||0),
+    buyer:document.getElementById('ms-buyer').value.trim(), paid:document.getElementById('ms-paid').checked
+  });
+  await storeSet('dairyMilkSales', dairyMilkSales);
+  closeModal(); renderAll(); showToast('Milk sale added');
+}
+async function deleteMilkSale(_, entryId){
+  if(!requireOwner()) return;
+  dairyMilkSales = dairyMilkSales.filter(m=>m.id!==entryId);
+  await storeSet('dairyMilkSales', dairyMilkSales);
+  renderAll();
+}
+
+/* ---- Farm-wide dairy costs ---- */
+function renderDairyCostsList(){
+  const el = document.getElementById('dairyCostsList');
+  if(!dairyCosts.length){ el.innerHTML = `<div class="empty">No farm-wide dairy costs logged yet.</div>`; return; }
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    ${dairyCosts.slice().reverse().map(c=>`
+      <tr>
+        <td>${c.date||''}</td>
+        <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
+        <td>${escapeHtml(c.description||'')}</td>
+        <td class="num">${fmt(c.amount)}</td>
+        <td>
+          <button class="icon-btn" onclick="openDairyCostModal('${c.id}')">Edit</button>
+          <button class="icon-btn" onclick="deleteDairyCost('${c.id}')">✕</button>
+        </td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+    <div class="summary-row"><div class="item">Total farm-wide dairy costs: <b>${fmt(dairyCostsTotal())}</b></div></div>
+  `;
+}
+function openDairyCostModal(costId){
+  if(!requireOwner()) return;
+  const existing = costId ? dairyCosts.find(c=>c.id===costId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing?'Edit':'Add'} dairy cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Category</label>
+        <select id="dc-cat">${DAIRY_COST_CATS.map(c=>`<option ${existing&&existing.category===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Date</label><input id="dc-date" type="date" value="${existing?existing.date:todayISO()}"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="dc-desc" value="${escapeHtml(existing?.description||'')}" placeholder="e.g. Napier grass, 2 tonnes"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="dc-amount" type="number" step="0.01" value="${existing?existing.amount:''}"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyCost(${existing?`'${costId}'`:'null'})">${existing?'Save changes':'Add cost'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyCost(costId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('dc-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const entry = {
+    id: costId||uid(), category: document.getElementById('dc-cat').value,
+    date: document.getElementById('dc-date').value, description: document.getElementById('dc-desc').value.trim(), amount
+  };
+  if(costId){ const idx=dairyCosts.findIndex(c=>c.id===costId); if(idx>-1) dairyCosts[idx]=entry; }
+  else dairyCosts.push(entry);
+  await storeSet('dairyCosts', dairyCosts);
+  closeModal(); renderAll(); showToast(costId?'Cost updated':'Cost added');
+}
+async function deleteDairyCost(id){
+  if(!requireOwner()) return;
+  dairyCosts = dairyCosts.filter(c=>c.id!==id);
+  await storeSet('dairyCosts', dairyCosts);
+  renderAll();
+}
+
+/* ---- Herd (animal) list ---- */
+function renderDairy(){
+  const activeAnimals = dairyAnimals.filter(a=>a.status!=='Culled');
+  const lactating = dairyAnimals.filter(a=>a.status==='Lactating');
+  const herdCost = dairyHerdCostTotal();
+  const profit = dairyProfitTotal();
+  document.getElementById('dairyCards').innerHTML = `
+    <div class="card dairy"><div class="label">Herd size (active)</div><div class="value">${activeAnimals.length}</div></div>
+    <div class="card water"><div class="label">Currently lactating</div><div class="value">${lactating.length}</div></div>
+    <div class="card growth"><div class="label">Total herd cost</div><div class="value">${fmt(herdCost)}</div></div>
+    <div class="card gold"><div class="label">Dairy profit / loss</div><div class="value" style="color:${profit>=0?'var(--growth)':'var(--danger)'}">${fmt(profit)}</div></div>
+  `;
+  renderMilkSalesList();
+  renderDairyCostsList();
+  renderDairyAnimals();
+}
+function renderDairyAnimals(){
+  const el = document.getElementById('dairyAnimalList');
+  if(!dairyAnimals.length){ el.innerHTML = `<div class="empty">No animals yet. Click <b>+ New animal</b> to add the first cow to your herd, by ear tag.</div>`; return; }
+  el.innerHTML = dairyAnimals.slice().reverse().map(a=>{
+    const cost = dairyAnimalCost(a);
+    const dim = daysInMilk(a);
+    const dOpen = daysOpen(a);
+    const lact = lactationNumber(a);
+    const interval = calvingIntervalDays(a);
+    const totalYield = dairyMilkYieldTotal(a);
+    const avgYield = dairyAvgDailyYield(a);
+    const culled = a.status==='Culled';
+    const disposalProfit = culled ? Number(a.cullSalePrice||0) - cost - Number(a.acquisitionCost||0) : null;
+    return `
+    <div class="batch">
+      <div class="batch-head" onclick="toggleDairyAnimal('${a.id}')">
+        <div>
+          <div class="batch-title">${escapeHtml(a.tagNumber||'No tag')}${a.name?(' — '+escapeHtml(a.name)):''} <span class="badge ${culled?'harvested':'active'}">${culled?'culled':a.status.toLowerCase()}</span></div>
+          <div class="batch-meta">${escapeHtml(a.breed)} · ${a.dateOfBirth?('born '+a.dateOfBirth+' · '):''}Lactation ${lact}${dim!==null?(' · '+dim+' days in milk'):''}${dOpen!==null?(' · '+dOpen+' days open'):''}</div>
+        </div>
+        <div class="batch-stats">
+          <div class="p">${fmt(cost)} cost</div>
+          ${culled ? `<div class="p ${disposalProfit>=0?'pos':'neg'}">${fmt(disposalProfit)} on disposal</div>` : ''}
+        </div>
+      </div>
+      <div class="batch-body ${a.openInUI?'open':''}" id="dairy-body-${a.id}">
+        <div class="summary-row" style="margin-top:14px;">
+          <div class="item">Total milk logged: <b>${totalYield.toFixed(1)} L</b></div>
+          <div class="item">Avg daily yield: <b>${avgYield.toFixed(1)} L</b></div>
+          ${interval!==null ? `<div class="item">Calving interval: <b>${interval} days</b></div>` : ''}
+          <div class="item">Health cost: <b>${fmt(dairyHealthCost(a))}</b></div>
+          <div class="item">Breeding cost: <b>${fmt(dairyBreedingCost(a))}</b></div>
+        </div>
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Milk log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openDairyMilkModal('${a.id}')">+ Add entry</button></div>
+        ${renderLogTable(a.milkLog, [
+          {key:'date',label:'Date'},{key:'session',label:'Session'},{key:'yieldLitres',label:'Yield (L)',numeric:true},
+          {key:'fatPct',label:'Fat %',numeric:true},{key:'snfPct',label:'SNF %',numeric:true}
+        ], a.id, 'deleteDairyMilk')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Breeding log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openDairyBreedingModal('${a.id}')">+ Add service record</button></div>
+        ${renderLogTable(a.breedingLog, [
+          {key:'date',label:'Service date'},{key:'type',label:'Type'},{key:'bullOrSemen',label:'Bull / Semen'},
+          {key:'pdResult',label:'Pregnancy diagnosis'},{key:'expectedCalvingDate',label:'Expected calving'},
+          {key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], a.id, 'deleteDairyBreeding')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Calving log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openDairyCalvingModal('${a.id}')">+ Record calving</button></div>
+        ${renderLogTable(a.calvingLog, [
+          {key:'date',label:'Calving date'},{key:'calfSex',label:'Calf sex'},{key:'calfOutcome',label:'Calf outcome'},{key:'complications',label:'Complications'}
+        ], a.id, 'deleteDairyCalving')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Health log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openDairyHealthModal('${a.id}')">+ Add record</button></div>
+        ${renderLogTable(a.healthLog, [
+          {key:'date',label:'Date'},{key:'condition',label:'Condition / Treatment'},{key:'vetSupplier',label:'Vet / Supplier'},
+          {key:'bcs',label:'BCS (1-5)',numeric:true},{key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], a.id, 'deleteDairyHealth')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Other costs</h2><button class="btn secondary small" onclick="event.stopPropagation(); openDairyOtherCostModal('${a.id}')">+ Add cost</button></div>
+        ${renderLogTable(a.costs, [
+          {key:'date',label:'Date'},{key:'description',label:'Description'},{key:'amount',label:'Amount',numeric:true,format:v=>fmt(v)}
+        ], a.id, 'deleteDairyOtherCost')}
+
+        ${culled ? `
+        <div style="margin-top:14px; padding:10px 12px; background:var(--bg-alt); border:1px solid var(--line); border-radius:8px; font-size:12.5px;">
+          Culled ${a.cullDate||''} — reason: <b>${escapeHtml(a.cullReason||'')}</b>${a.cullReason==='Sold' ? ` — sale price: <b>${fmt(a.cullSalePrice)}</b>` : ''}
+        </div>` : ''}
+
+        <div style="margin-top:14px; text-align:right;">
+          <button class="icon-btn" onclick="event.stopPropagation(); openDairyAnimalModal('${a.id}')">Edit details</button>
+          ${!culled ? `<button class="icon-btn" onclick="event.stopPropagation(); openCullModal('${a.id}')">Cull / dispose</button>` : ''}
+          <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deleteDairyAnimal('${a.id}')">Delete record</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleDairyAnimal(id){
+  const a = dairyAnimals.find(x=>x.id===id);
+  a.openInUI = !a.openInUI;
+  renderDairyAnimals();
+}
+
+/* ---- Animal create/edit/delete/cull ---- */
+function openDairyAnimalModal(animalId){
+  if(!requireOwner()) return;
+  const existing = animalId ? dairyAnimals.find(a=>a.id===animalId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing ? 'Edit animal' : 'New animal'}</h3>
+    <div class="field-row">
+      <div class="field"><label>Ear tag number</label><input id="da-tag" value="${escapeHtml(existing?.tagNumber||'')}" placeholder="e.g. KE-045"></div>
+      <div class="field"><label>Name — optional</label><input id="da-name" value="${escapeHtml(existing?.name||'')}" placeholder="e.g. Daisy"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Breed</label>
+        <select id="da-breed">${DAIRY_BREEDS.map(b=>`<option ${existing&&existing.breed===b?'selected':''}>${b}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Status</label>
+        <select id="da-status">${DAIRY_STATUSES.map(s=>`<option ${existing&&existing.status===s?'selected':''}>${s}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Date of birth</label><input id="da-dob" type="date" value="${existing?existing.dateOfBirth:''}"></div>
+      <div class="field"><label>Source</label><input id="da-source" value="${escapeHtml(existing?.source||'')}" placeholder="e.g. Born on farm, Purchased"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Acquisition date</label><input id="da-acqdate" type="date" value="${existing?existing.acquisitionDate:todayISO()}"></div>
+      <div class="field"><label>Acquisition cost (${CURRENCY}) — if purchased</label><input id="da-acqcost" type="number" step="0.01" value="${existing?existing.acquisitionCost:''}"></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="da-notes">${escapeHtml(existing?.notes||'')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyAnimal(${existing?`'${animalId}'`:'null'})">${existing?'Save changes':'Add animal'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyAnimal(animalId){
+  if(!requireOwner()) return;
+  const tagNumber = document.getElementById('da-tag').value.trim();
+  if(!tagNumber){ showToast('Enter an ear tag number'); return; }
+  const fields = {
+    tagNumber, name: document.getElementById('da-name').value.trim(),
+    breed: document.getElementById('da-breed').value, status: document.getElementById('da-status').value,
+    dateOfBirth: document.getElementById('da-dob').value, source: document.getElementById('da-source').value.trim(),
+    acquisitionDate: document.getElementById('da-acqdate').value, acquisitionCost: document.getElementById('da-acqcost').value,
+    notes: document.getElementById('da-notes').value.trim()
+  };
+  if(animalId){
+    Object.assign(dairyAnimals.find(a=>a.id===animalId), fields);
+  } else {
+    const a = blankDairyAnimal();
+    Object.assign(a, fields);
+    dairyAnimals.push(a);
+  }
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast(animalId?'Animal updated':'Animal added');
+}
+async function deleteDairyAnimal(id){
+  if(!requireOwner()) return;
+  if(!confirm('Delete this animal and her entire record — milk, breeding, calving, and health history? This cannot be undone.')) return;
+  dairyAnimals = dairyAnimals.filter(a=>a.id!==id);
+  await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+  showToast('Animal record deleted');
+}
+function openCullModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Cull / dispose animal</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="cu-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Reason</label>
+        <select id="cu-reason">${CULL_REASONS.map(r=>`<option>${r}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="field"><label>Sale price (${CURRENCY}) — only if sold</label><input id="cu-price" type="number" step="0.01"></div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">Her full record stays in the herd list, marked as culled — nothing is deleted.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="background:var(--danger);" onclick="saveCull('${animalId}')">Confirm cull</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveCull(animalId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.status = 'Culled';
+  a.cullDate = document.getElementById('cu-date').value;
+  a.cullReason = document.getElementById('cu-reason').value;
+  a.cullSalePrice = document.getElementById('cu-price').value;
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Animal marked as culled');
+}
+
+/* ---- Milk log ---- */
+function openDairyMilkModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add milk entry</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="dm-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Session</label><select id="dm-session">${MILK_SESSIONS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Yield (litres)</label><input id="dm-yield" type="number" step="0.1"></div>
+    <div class="field-row">
+      <div class="field"><label>Butterfat % — optional</label><input id="dm-fat" type="number" step="0.1"></div>
+      <div class="field"><label>SNF % — optional</label><input id="dm-snf" type="number" step="0.1"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyMilk('${animalId}')">Add entry</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyMilk(animalId){
+  if(!requireOwner()) return;
+  const yieldLitres = Number(document.getElementById('dm-yield').value||0);
+  if(!yieldLitres){ showToast('Enter the yield'); return; }
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.milkLog.push({id:uid(), date:document.getElementById('dm-date').value, session:document.getElementById('dm-session').value, yieldLitres, fatPct:document.getElementById('dm-fat').value, snfPct:document.getElementById('dm-snf').value});
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Milk entry added');
+}
+async function deleteDairyMilk(animalId, entryId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.milkLog = a.milkLog.filter(m=>m.id!==entryId);
+  await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+}
+
+/* ---- Breeding log ---- */
+function openDairyBreedingModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add breeding / service record</h3>
+    <div class="field-row">
+      <div class="field"><label>Service date</label><input id="db-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Type</label><select id="db-type">${BREEDING_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Bull / semen used</label><input id="db-bull" placeholder="e.g. Friesian semen — code FR2201"></div>
+    <div class="field-row">
+      <div class="field"><label>Technician</label><input id="db-tech" placeholder="e.g. AI technician name"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="db-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Pregnancy diagnosis (PD) result</label><select id="db-pd">${PD_RESULTS.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    <div style="font-size:11px; color:var(--ink-soft); margin-top:-6px; margin-bottom:12px;">Expected calving date is calculated automatically (service date + ${GESTATION_DAYS} days gestation) once you save.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyBreeding('${animalId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyBreeding(animalId){
+  if(!requireOwner()) return;
+  const date = document.getElementById('db-date').value;
+  if(!date){ showToast('Enter the service date'); return; }
+  const expected = new Date(date); expected.setDate(expected.getDate()+GESTATION_DAYS);
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.breedingLog.push({
+    id:uid(), date, type:document.getElementById('db-type').value, bullOrSemen:document.getElementById('db-bull').value.trim(),
+    technician:document.getElementById('db-tech').value.trim(), cost:Number(document.getElementById('db-cost').value||0),
+    pdResult:document.getElementById('db-pd').value, expectedCalvingDate: expected.toISOString().slice(0,10)
+  });
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Breeding record added');
+}
+async function deleteDairyBreeding(animalId, entryId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.breedingLog = a.breedingLog.filter(b=>b.id!==entryId);
+  await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+}
+
+/* ---- Calving log ---- */
+function openDairyCalvingModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Record calving</h3>
+    <div class="field-row">
+      <div class="field"><label>Calving date</label><input id="dv-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Calf sex</label><select id="dv-sex"><option>Female</option><option>Male</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Calf outcome</label><select id="dv-outcome"><option>Alive</option><option>Stillborn</option></select></div>
+      <div class="field"><label>Complications</label><select id="dv-comp"><option>None</option><option>Retained Placenta</option><option>Milk Fever</option><option>Dystocia (Difficult Birth)</option><option>Other</option></select></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="dv-notes"></textarea></div>
+    <div style="font-size:11px; color:var(--ink-soft); margin-top:-6px; margin-bottom:12px;">This starts a new lactation for her — her lactation number and days-in-milk update automatically.</div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyCalving('${animalId}')">Record calving</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyCalving(animalId){
+  if(!requireOwner()) return;
+  const date = document.getElementById('dv-date').value;
+  if(!date){ showToast('Enter the calving date'); return; }
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.calvingLog.push({id:uid(), date, calfSex:document.getElementById('dv-sex').value, calfOutcome:document.getElementById('dv-outcome').value, complications:document.getElementById('dv-comp').value, notes:document.getElementById('dv-notes').value.trim()});
+  if(a.status!=='Culled') a.status = 'Lactating';
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Calving recorded');
+}
+async function deleteDairyCalving(animalId, entryId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.calvingLog = a.calvingLog.filter(c=>c.id!==entryId);
+  await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+}
+
+/* ---- Health log ---- */
+function openDairyHealthModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add health record</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="dh-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="dh-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Condition / treatment</label><input id="dh-condition" placeholder="e.g. Mastitis, FMD Vaccination, Deworming, Hoof trimming"></div>
+    <div class="field"><label>Vet / supplier</label><input id="dh-supplier" placeholder="e.g. Dr. Kamau"></div>
+    <div class="field"><label>Body Condition Score (BCS, 1–5) — optional</label><input id="dh-bcs" type="number" min="1" max="5" step="0.5"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyHealth('${animalId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyHealth(animalId){
+  if(!requireOwner()) return;
+  const condition = document.getElementById('dh-condition').value.trim();
+  if(!condition){ showToast('Enter the condition or treatment'); return; }
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.healthLog.push({id:uid(), date:document.getElementById('dh-date').value, condition, vetSupplier:document.getElementById('dh-supplier').value.trim(), cost:Number(document.getElementById('dh-cost').value||0), bcs:document.getElementById('dh-bcs').value});
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Health record added');
+}
+async function deleteDairyHealth(animalId, entryId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.healthLog = a.healthLog.filter(h=>h.id!==entryId);
+  await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+}
+
+/* ---- Other per-animal costs ---- */
+function openDairyOtherCostModal(animalId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add other cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="do-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Amount (${CURRENCY})</label><input id="do-amount" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="do-desc" placeholder="e.g. Hoof trimming tools"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveDairyOtherCost('${animalId}')">Add cost</button>
+    </div>
+  `;
+  openModal();
+}
+async function saveDairyOtherCost(animalId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('do-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.costs.push({id:uid(), date:document.getElementById('do-date').value, description:document.getElementById('do-desc').value.trim(), amount});
+  await storeSet('dairyAnimals', dairyAnimals);
+  closeModal(); renderAll(); showToast('Cost added');
+}
+async function deleteDairyOtherCost(animalId, entryId){
+  if(!requireOwner()) return;
+  const a = dairyAnimals.find(x=>x.id===animalId);
+  a.costs = a.costs.filter(c=>c.id!==entryId);
+  await storeSet('dairyAnimals', dairyAnimals);
   renderAll();
 }
 
