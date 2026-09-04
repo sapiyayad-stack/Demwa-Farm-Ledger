@@ -36,6 +36,8 @@
     --poultry-wash:#F3E4D2;
     --dairy:#3E6E8E;
     --dairy-wash:#DDE9F0;
+    --pig:#C97A8E;
+    --pig-wash:#F5E1E7;
     --danger:#A23B2E;
     --radius:10px;
   }
@@ -101,6 +103,7 @@
   .card.gold{border-left:3px solid var(--gold);}
   .card.poultry{border-left:3px solid var(--poultry);}
   .card.dairy{border-left:3px solid var(--dairy);}
+  .card.pig{border-left:3px solid var(--pig);}
 
   section{margin-bottom:36px;}
   .section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
@@ -375,6 +378,42 @@
   </div>
 </div>
 
+<!-- PAYWALL: shown instead of the app once a farm's free trial has ended -->
+<div id="paywallScreen" style="min-height:100vh; display:none; align-items:center; justify-content:center; background:var(--bg); padding:20px; overflow:auto;">
+  <div style="width:460px; max-width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:32px 28px; text-align:center; margin:20px 0;">
+    <div style="font-family:'Fraunces',serif; font-size:22px; font-weight:700; color:var(--onion); margin-bottom:8px;">🧅 Demwa Farm Ledger</div>
+    <div style="font-family:'Fraunces',serif; font-size:19px; font-weight:600; margin-bottom:10px;">Your free trial has ended</div>
+    <p style="font-size:13.5px; color:var(--ink-soft); line-height:1.6; margin-bottom:18px;">
+      <span id="paywallFarmName"></span> has had full access for 1 month. Pick which modules you need — the price and tier update as you choose.
+    </p>
+
+    <div id="pw-module-checks" style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px; text-align:left;"></div>
+
+    <div id="pw-tier-summary" style="background:var(--gold-wash); border-radius:10px; padding:12px 16px; margin-bottom:18px; text-align:left;">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--gold); font-weight:700;">Your plan</div>
+      <div id="pw-tier-name" style="font-family:'Fraunces',serif; font-weight:700; font-size:17px; margin-top:2px;">Select modules above</div>
+    </div>
+
+    <div style="background:var(--growth-wash); border-radius:10px; padding:16px 18px; text-align:left; margin-bottom:18px;">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--growth); font-weight:700; margin-bottom:8px;">How to pay</div>
+      <div style="font-size:13.5px; line-height:1.9;">
+        1. Go to M-Pesa → Lipa na M-Pesa → Pay Bill<br>
+        2. Business Number: <b class="mono">542542</b><br>
+        3. Account Number: <b class="mono">03103716726150</b><br>
+        4. Amount: <b class="mono" id="paywallPrice">Select modules above</b><br>
+        5. Enter your M-Pesa PIN and confirm
+      </div>
+    </div>
+    <div style="text-align:left; margin-bottom:6px;">
+      <label style="display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); margin-bottom:4px;">Already paid? Enter your M-Pesa code</label>
+      <input id="pw-mpesa-code" placeholder="e.g. QJK7XYZ123" style="width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:6px; font-size:13.5px; box-sizing:border-box; margin-bottom:10px;">
+    </div>
+    <button class="btn" style="width:100%; margin-bottom:10px;" onclick="submitPaymentProof()">I've paid — submit for activation</button>
+    <button class="btn secondary" style="width:100%; margin-bottom:10px;" onclick="openSupportModal()">Something wrong? Contact support</button>
+    <button class="btn secondary" style="width:100%;" onclick="doLogout()">Log out</button>
+  </div>
+</div>
+
 <div class="app" id="appShell" style="display:none;">
   <div class="sidebar">
     <div class="brand">
@@ -387,10 +426,12 @@
       <button data-tab="water"><span class="dot"></span>Water Records</button>
       <button data-tab="poultry"><span class="dot"></span>Poultry</button>
       <button data-tab="dairy"><span class="dot"></span>Dairy</button>
+      <button data-tab="pig"><span class="dot"></span>Pig</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
     <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
+    <button class="icon-btn" id="btnBillingAdmin" style="display:none; color:var(--growth); border:1px solid #3a4a2e; border-radius:8px; padding:8px 10px; margin-top:8px; text-align:left;" onclick="openBillingAdminModal()">💳 Billing (pending payments)</button>
     <div style="display:flex; gap:12px; margin-top:10px; padding:0 2px;">
       <button class="icon-btn" style="color:#D9CFBC; padding:0; font-size:12px;" onclick="openReviewsModal()">★ Reviews</button>
       <button class="icon-btn" style="color:#D9CFBC; padding:0; font-size:12px;" onclick="openSupportModal()">Need help?</button>
@@ -399,6 +440,7 @@
       <div id="userEmailLabel" style="margin-bottom:4px; word-break:break-all;"></div>
       <div id="roleLabel" style="font-size:10.5px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;"></div>
       <div id="farmNameLabel" style="font-size:12px; color:var(--gold); font-weight:600; margin-bottom:2px;"></div>
+      <div id="trialBadge" style="font-size:10.5px; margin-bottom:4px; display:none;"></div>
       <div style="font-size:10px; color:#8A7C64; margin-bottom:4px;">Farm ID: <span id="farmCodeLabel" class="mono"></span></div>
       <button class="icon-btn" style="color:#D9CFBC; padding:0;" onclick="doLogout()">Log out</button>
     </div>
@@ -546,6 +588,32 @@
       </section>
     </div>
 
+    <!-- PIG -->
+    <div id="tab-pig" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Pig</h1>
+          <p>Track each litter or batch from farrowing (or purchase) through to market — feed, mortality, health, and sales.</p>
+        </div>
+        <button class="btn" id="btnNewPigBatch" onclick="openPigBatchModal()">+ New batch</button>
+      </div>
+      <div class="cards" id="pigCards"></div>
+
+      <section>
+        <div class="section-head">
+          <h2>Farm-wide pig costs</h2>
+          <button class="btn secondary small" id="btnAddPigCost" onclick="openPigCostModal()">+ Add cost</button>
+        </div>
+        <p style="color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Housing, pens, breeding services, and labour costs that apply across all your pigs, not one specific batch.</p>
+        <div id="pigCostsList"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Batches</h2></div>
+        <div id="pigBatchList"></div>
+      </section>
+    </div>
+
     <!-- REPORTS -->
     <div id="tab-reports" style="display:none;">
       <div class="topline">
@@ -620,6 +688,9 @@ db.enablePersistence({synchronizeTabs:true}).catch(()=>{ /* offline cache unavai
 let currentUid = null;
 let currentFarmId = null;
 let currentFarmName = '';
+let currentSubscriptionStatus = 'active';
+let currentTrialDaysRemaining = null;
+let currentSubscriptionModules = null; // array of module keys the farm is paid for, or null = full access (trial/legacy)
 let currentRole = 'owner';
 let farmDocRef = null;
 
@@ -681,7 +752,7 @@ async function doSignup(){
       step = 'writing user record (new farm)';
       await withRetry(()=>db.collection('users').doc(cred.user.uid).set({email, farmId, role:'owner', farmName}));
       step = 'writing farm record';
-      await withRetry(()=>db.collection('farms').doc(farmId).set({batches:[], customers:[], farmName}));
+      await withRetry(()=>db.collection('farms').doc(farmId).set({batches:[], customers:[], farmName, trialStartDate: todayISO(), subscriptionStatus:'trial'}));
     }
     signupInProgress = false;
     await resolveAndShowApp(cred.user);
@@ -769,13 +840,38 @@ async function resolveAndShowApp(user){
   document.getElementById('btnNewBatch').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnNewCustomer').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnInvite').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnBillingAdmin').style.display = isSiteAdmin() ? '' : 'none';
   document.getElementById('btnNewPoultryBatch').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnAddPoultryCost').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnNewDairyAnimal').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnAddMilkSale').style.display = isOwner() ? '' : 'none';
   document.getElementById('btnAddDairyCost').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnNewPigBatch').style.display = isOwner() ? '' : 'none';
+  document.getElementById('btnAddPigCost').style.display = isOwner() ? '' : 'none';
   await loadFarmData();
   document.getElementById('farmNameLabel').textContent = currentFarmName || 'Your farm';
+
+  if(currentSubscriptionStatus === 'expired'){
+    document.getElementById('appShell').style.display = 'none';
+    document.getElementById('paywallScreen').style.display = 'flex';
+    document.getElementById('paywallFarmName').textContent = currentFarmName || 'Your farm';
+    renderPaywallModuleChecks();
+    return; // don't render the app underneath — the trial is over
+  }
+  document.getElementById('paywallScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+
+  const trialEl = document.getElementById('trialBadge');
+  if(currentSubscriptionStatus === 'trial'){
+    const soon = currentTrialDaysRemaining <= 7;
+    trialEl.style.display = 'block';
+    trialEl.style.color = soon ? '#E0824A' : '#8A7C64';
+    trialEl.textContent = `Free trial: ${currentTrialDaysRemaining} day${currentTrialDaysRemaining!==1?'s':''} left`;
+  } else {
+    trialEl.style.display = 'none';
+  }
+
+  applyPlanGating();
   renderAll();
 }
 
@@ -791,6 +887,31 @@ auth.onAuthStateChanged(async (user)=>{
 });
 
 /* ---------------- Firestore data layer ---------------- */
+const TRIAL_DAYS = 30; // 1 month
+function applyPlanGating(){
+  const gatedTabs = ['batches','water','poultry','dairy','pig'];
+  const allowed = (currentSubscriptionModules && currentSubscriptionModules.length)
+    ? currentSubscriptionModules
+    : gatedTabs; // premium/full plan, trial, or legacy farms (no plan set) — full access
+  gatedTabs.forEach(tab=>{
+    const btn = document.querySelector(`#nav button[data-tab="${tab}"]`);
+    if(btn) btn.style.display = allowed.includes(tab) ? '' : 'none';
+  });
+  // If the tab currently open just got hidden, fall back to the dashboard.
+  const activeBtn = document.querySelector('#nav button.active');
+  if(activeBtn && activeBtn.style.display === 'none') goTo('dashboard');
+}
+function computeSubscriptionStatus(data){
+  // Farms created before this feature existed have no trialStartDate at all —
+  // grandfather them in as active rather than retroactively starting a trial
+  // clock on people already using the system.
+  if(!data.trialStartDate){ return {status:'active', daysRemaining:null}; }
+  if(data.subscriptionStatus === 'active'){ return {status:'active', daysRemaining:null}; }
+  const elapsed = daysBetween(data.trialStartDate, todayISO());
+  const remaining = TRIAL_DAYS - elapsed;
+  return remaining > 0 ? {status:'trial', daysRemaining:remaining} : {status:'expired', daysRemaining:0};
+}
+
 async function loadFarmData(){
   try{
     const snap = await farmDocRef.get();
@@ -803,18 +924,27 @@ async function loadFarmData(){
     dairyAnimals = data.dairyAnimals || [];
     dairyCosts = data.dairyCosts || [];
     dairyMilkSales = data.dairyMilkSales || [];
+    pigBatches = data.pigBatches || [];
+    pigCosts = data.pigCosts || [];
     currentFarmName = data.farmName || 'My Farm';
+    const sub = computeSubscriptionStatus(data);
+    currentSubscriptionStatus = sub.status;
+    currentTrialDaysRemaining = sub.daysRemaining;
+    // null = trial or a legacy farm from before paid tiers existed — full access either way.
+    currentSubscriptionModules = data.subscriptionModules || null;
   } catch(e){
     console.error('load failed', e);
     showToast('Could not load your data — check your connection');
     batches = []; customers = []; waterCosts = []; poultryBatches = []; poultryCosts = [];
-    dairyAnimals = []; dairyCosts = []; dairyMilkSales = [];
+    dairyAnimals = []; dairyCosts = []; dairyMilkSales = []; pigBatches = []; pigCosts = [];
+    currentSubscriptionStatus = 'active'; currentTrialDaysRemaining = null;
+    currentSubscriptionModules = null;
   }
 }
 async function saveFarmData(){
   if(!farmDocRef) return;
   if(!isOwner()){ showToast('View only — ask the farm owner to make this change'); return; }
-  try{ await farmDocRef.set({batches, customers, waterCosts, poultryBatches, poultryCosts, dairyAnimals, dairyCosts, dairyMilkSales}, {merge:true}); }
+  try{ await farmDocRef.set({batches, customers, waterCosts, poultryBatches, poultryCosts, dairyAnimals, dairyCosts, dairyMilkSales, pigBatches, pigCosts}, {merge:true}); }
   catch(e){ console.error('save failed', e); showToast('Could not save — will retry once you\'re back online'); }
 }
 /* storeSet('batches', batches) / storeSet('customers', customers) calls throughout
@@ -835,6 +965,8 @@ let dairyAnimals = [];   // each cow tracked individually by ear tag — lactati
                           // breeding, calving, and health follow HER, not a batch
 let dairyCosts = [];     // farm-wide dairy costs (feed, housing, milking equipment, labour)
 let dairyMilkSales = []; // pooled milk sales — milk from the whole herd sold together
+let pigBatches = [];     // each litter or purchased batch, mirroring the poultry pattern
+let pigCosts = [];       // farm-wide pig costs (pens, breeding services, labour)
 
 const STAGE_DEFS = [
   {key:'seedling', label:'Seedling\nPurchase'},
@@ -872,6 +1004,7 @@ function renderAll(){
   renderWater();
   renderPoultry();
   renderDairy();
+  renderPig();
 }
 
 /* ---------------- Calculations ---------------- */
@@ -915,14 +1048,18 @@ function renderDashboard(){
   const dairyRev = milkSalesRevenue() + dairyCullRevenue();
   const dairyProfitVal = dairyProfitTotal();
 
-  const consolidated = totalProfit + waterProfit + poultryProfitTotal + dairyProfitVal;
+  const pigCost = pigBatches.reduce((s,b)=>s+pigBatchCost(b),0) + pigCostsTotal();
+  const pigRev = pigBatches.reduce((s,b)=>s+pigRevenue(b),0);
+  const pigProfitVal = pigRev - pigCost;
+
+  const consolidated = totalProfit + waterProfit + poultryProfitTotal + dairyProfitVal + pigProfitVal;
 
   document.getElementById('dashHeroProfit').innerHTML = `
     <div class="hero-profit" style="background:${consolidated>=0?'var(--growth)':'var(--danger)'};">
       <div>
         <div class="label">Consolidated farm net profit — all enterprises</div>
         <div class="value">${fmt(consolidated)}</div>
-        <div class="sub">Crops + Water + Poultry + Dairy, combined</div>
+        <div class="sub">Crops + Water + Poultry + Dairy + Pig, combined</div>
       </div>
     </div>
   `;
@@ -965,6 +1102,13 @@ function renderDashboard(){
         <div class="row"><span>Cost</span><b>${fmt(dairyCost)}</b></div>
         <div class="row"><span>Revenue</span><b>${fmt(dairyRev)}</b></div>
         <div class="row"><span>Profit</span><b style="color:${dairyProfitVal>=0?'var(--growth)':'var(--danger)'}">${fmt(dairyProfitVal)}</b></div>
+      </div>
+      <div class="crop-card" style="border-left:3px solid var(--pig);">
+        <div class="crop-name">Pig</div>
+        <div class="crop-count">${pigBatches.filter(b=>pigBatchStatus(b)==='active').length} active batch${pigBatches.filter(b=>pigBatchStatus(b)==='active').length!==1?'es':''}</div>
+        <div class="row"><span>Cost</span><b>${fmt(pigCost)}</b></div>
+        <div class="row"><span>Revenue</span><b>${fmt(pigRev)}</b></div>
+        <div class="row"><span>Profit</span><b style="color:${pigProfitVal>=0?'var(--growth)':'var(--danger)'}">${fmt(pigProfitVal)}</b></div>
       </div>
     </div>
   `;
@@ -1024,12 +1168,14 @@ function goTo(tab){
   document.getElementById('tab-water').style.display = tab==='water' ? 'block':'none';
   document.getElementById('tab-poultry').style.display = tab==='poultry' ? 'block':'none';
   document.getElementById('tab-dairy').style.display = tab==='dairy' ? 'block':'none';
+  document.getElementById('tab-pig').style.display = tab==='pig' ? 'block':'none';
   document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
   document.getElementById('tab-guides').style.display = tab==='guides' ? 'block':'none';
   if(tab==='reports') renderReports();
   if(tab==='guides') renderGuidesTab();
   if(tab==='poultry') renderPoultry();
   if(tab==='dairy') renderDairy();
+  if(tab==='pig') renderPig();
 }
 document.getElementById('nav').addEventListener('click', e=>{
   const btn = e.target.closest('button[data-tab]');
@@ -1942,7 +2088,10 @@ function renderReports(){
   const poultryTotalRevenue = poultryBatches.reduce((s,b)=>s+poultryRevenue(b),0);
   const poultryTotalProfit = poultryTotalRevenue - poultryTotalCost;
   const dairyTotalProfit = dairyProfitTotal();
-  const netBusiness = cropProfit + waterProfit + poultryTotalProfit + dairyTotalProfit;
+  const pigTotalCost = pigBatches.reduce((s,b)=>s+pigBatchCost(b),0) + pigCostsTotal();
+  const pigTotalRevenue = pigBatches.reduce((s,b)=>s+pigRevenue(b),0);
+  const pigTotalProfit = pigTotalRevenue - pigTotalCost;
+  const netBusiness = cropProfit + waterProfit + poultryTotalProfit + dairyTotalProfit + pigTotalProfit;
   const depositsHeld = depositsHeldTotal();
 
   document.getElementById('reportCards').innerHTML = `
@@ -1950,6 +2099,7 @@ function renderReports(){
     <div class="card water"><div class="label">Water profit (billed − water costs)</div><div class="value" style="color:${waterProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(waterProfit)}</div></div>
     <div class="card poultry"><div class="label">Poultry profit / loss</div><div class="value" style="color:${poultryTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(poultryTotalProfit)}</div></div>
     <div class="card dairy"><div class="label">Dairy profit / loss</div><div class="value" style="color:${dairyTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(dairyTotalProfit)}</div></div>
+    <div class="card pig"><div class="label">Pig profit / loss</div><div class="value" style="color:${pigTotalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(pigTotalProfit)}</div></div>
     <div class="card gold"><div class="label">Consolidated farm net profit</div><div class="value" style="color:${netBusiness>=0?'var(--growth)':'var(--danger)'}">${fmt(netBusiness)}</div></div>
     <div class="card growth"><div class="label">Deposits held (excluded above)</div><div class="value">${fmt(depositsHeld)}</div></div>
   `;
@@ -2060,8 +2210,131 @@ function buildInsights(filtered, waterTotals){
 // every other farm's owner, gets read-only access. Add more emails here later
 // if you want to bring on co-editors.
 const SITE_ADMIN_EMAILS = ['sapiyayad@gmail.com'];
+// Payment details shown on the paywall — edit these if your Paybill/Account ever change.
+const SUBSCRIPTION_PAYBILL = '542542';
+const SUBSCRIPTION_ACCOUNT = '03103716726150'; // I&M Bank
+const MODULE_LABELS = {batches:'Crop Batches', water:'Water Records', poultry:'Poultry', dairy:'Dairy', pig:'Pig'};
+const ALL_MODULE_KEYS = ['batches','water','poultry','dairy','pig'];
+// One tier per possible module count (1 through 5), interpolated evenly
+// between the KES 2,500 floor (1 module) and KES 10,000 ceiling (all 5).
+const PRICING_TIERS = [
+  {count:1, name:'Silver',   price:2500},
+  {count:2, name:'Gold',     price:4375},
+  {count:3, name:'Platinum', price:6250},
+  {count:4, name:'Titanium', price:8125},
+  {count:5, name:'Diamond',  price:10000}
+];
+function tierForCount(n){ return PRICING_TIERS.find(t=>t.count===n) || null; }
 function isSiteAdmin(){
   return !!(auth.currentUser && auth.currentUser.email && SITE_ADMIN_EMAILS.includes(auth.currentUser.email.toLowerCase()));
+}
+
+/* ---------------- Manual M-Pesa subscription payments ---------------- */
+function renderPaywallModuleChecks(){
+  const el = document.getElementById('pw-module-checks');
+  el.innerHTML = ALL_MODULE_KEYS.map(key=>`
+    <label style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px;">
+      <input type="checkbox" class="pw-module-cb" value="${key}" style="width:auto;" onchange="onPaywallModuleChange()">
+      <span>${MODULE_LABELS[key]}</span>
+    </label>
+  `).join('');
+  onPaywallModuleChange();
+}
+function onPaywallModuleChange(){
+  const checked = Array.from(document.querySelectorAll('.pw-module-cb:checked')).map(cb=>cb.value);
+  const tier = tierForCount(checked.length);
+  const nameEl = document.getElementById('pw-tier-name');
+  const priceEl = document.getElementById('paywallPrice');
+  if(tier){
+    nameEl.textContent = `${tier.name} — ${checked.map(k=>MODULE_LABELS[k]).join(', ')}`;
+    priceEl.textContent = `KES ${tier.price.toLocaleString()}`;
+  } else {
+    nameEl.textContent = 'Select at least one module above';
+    priceEl.textContent = 'Select modules above';
+  }
+}
+async function submitPaymentProof(){
+  const checked = Array.from(document.querySelectorAll('.pw-module-cb:checked')).map(cb=>cb.value);
+  const tier = tierForCount(checked.length);
+  if(!tier){ showToast('Select at least one module'); return; }
+  const code = document.getElementById('pw-mpesa-code').value.trim();
+  if(!code){ showToast('Enter your M-Pesa confirmation code'); return; }
+  try{
+    await db.collection('payment_submissions').add({
+      farmId: currentFarmId, farmName: currentFarmName,
+      submittedByEmail: auth.currentUser ? auth.currentUser.email : '',
+      mpesaCode: code, amount: tier.price, tierName: tier.name, modules: checked,
+      status: 'pending', submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Submitted — you\'ll be activated shortly once confirmed');
+    document.getElementById('pw-mpesa-code').value = '';
+  } catch(e){
+    console.error(e);
+    showToast(`Could not submit: ${e.code||''} ${e.message||''}`);
+  }
+}
+
+/* Site-admin only: review and approve pending payment submissions across every farm */
+function openBillingAdminModal(){
+  if(!isSiteAdmin()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Pending payments</h3>
+    <div id="billingAdminList"><div class="empty">Loading…</div></div>
+  `;
+  openModal('520px');
+  loadBillingSubmissions();
+}
+let _billingSubmissionsCache = [];
+async function loadBillingSubmissions(){
+  const el = document.getElementById('billingAdminList');
+  try{
+    const snap = await db.collection('payment_submissions').where('status','==','pending').get();
+    _billingSubmissionsCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    if(!_billingSubmissionsCache.length){ el.innerHTML = `<div class="empty">No pending payments right now.</div>`; return; }
+    el.innerHTML = _billingSubmissionsCache.map(p=>{
+      const modules = p.modules || [];
+      const planLabel = `${p.tierName||'—'} — ${modules.map(k=>MODULE_LABELS[k]||k).join(', ')}`;
+      return `<div class="review-card">
+        <div class="who">${escapeHtml(p.farmName||'Unknown farm')}</div>
+        <div class="farm">${escapeHtml(p.submittedByEmail||'')} · Farm ID: ${escapeHtml(p.farmId||'')}</div>
+        <div class="comment">Plan requested: <b>${escapeHtml(planLabel)}</b><br>M-Pesa code: <b class="mono">${escapeHtml(p.mpesaCode||'')}</b> — Amount: ${fmt(p.amount)}</div>
+        <div style="margin-top:8px; text-align:right;">
+          <button class="btn secondary small" onclick="rejectPayment('${p.id}')">Reject</button>
+          <button class="btn small" onclick="approvePayment('${p.id}')">Approve &amp; activate</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e){
+    console.error(e);
+    el.innerHTML = `<div class="empty">Couldn't load — check your connection.</div>`;
+  }
+}
+async function approvePayment(submissionId){
+  if(!isSiteAdmin()) return;
+  const sub = _billingSubmissionsCache.find(s=>s.id===submissionId);
+  if(!sub){ showToast('Could not find that submission — reload and try again'); return; }
+  if(!confirm(`Confirm this M-Pesa code is genuine and activate ${sub.farmName} on the ${sub.tierName} plan?`)) return;
+  try{
+    await db.collection('farms').doc(sub.farmId).set({subscriptionStatus:'active', subscriptionModules: sub.modules||[]}, {merge:true});
+    await db.collection('payment_submissions').doc(submissionId).update({status:'confirmed'});
+    showToast('Farm activated');
+    loadBillingSubmissions();
+  } catch(e){
+    console.error(e);
+    showToast('Could not activate — check your connection');
+  }
+}
+async function rejectPayment(submissionId){
+  if(!isSiteAdmin()) return;
+  try{
+    await db.collection('payment_submissions').doc(submissionId).update({status:'rejected'});
+    loadBillingSubmissions();
+  } catch(e){
+    console.error(e);
+    showToast('Could not update — check your connection');
+  }
 }
 
 let _guidesCache = [];
@@ -3539,6 +3812,475 @@ async function deleteDairyOtherCost(animalId, entryId){
   const a = dairyAnimals.find(x=>x.id===animalId);
   a.costs = a.costs.filter(c=>c.id!==entryId);
   await storeSet('dairyAnimals', dairyAnimals);
+  renderAll();
+}
+
+/* ==================== PIG MANAGEMENT ==================== */
+// Real pig-farming terminology: farrowing, litter, weaning, gestation, market
+// weight, FCR — same batch-centric pattern as Poultry (a "batch" here is a
+// litter farrowed on the farm, or a purchased batch of weaners/growers).
+const PIG_BREEDS = ['Large White','Landrace','Duroc','Kenya Local/Indigenous','Crossbreed','Other'];
+const PIG_COST_CATS = ['Housing & Pens','Farm Operations & Overhead','Labour & Staffing','Breeding Services','Other'];
+const PIG_GESTATION_DAYS = 114; // ~3 months, 3 weeks, 3 days — standard pig gestation
+
+function blankPigBatch(){
+  return {
+    id: uid(), breed:'Large White', source:'Farrowed on farm', quantityStarted:'', startDate: todayISO(), notes:'',
+    farrowingDate:'', litterBornAlive:'', litterStillborn:'', weaningDate:'', avgWeaningWeightKg:'',
+    avgMarketWeightKg:'',
+    feedLog:[], mortalityLog:[], healthLog:[], salesLog:[], costs:[],
+    openInUI:true
+  };
+}
+
+/* ---- Calculations (mirrors poultry exactly, pig terminology) ---- */
+function pigBatchDeaths(b){ return (b.mortalityLog||[]).reduce((s,m)=>s+Number(m.deaths||0),0); }
+function pigBatchSoldHead(b){ return (b.salesLog||[]).reduce((s,x)=>s+Number(x.qty||0),0); }
+function pigBatchRemaining(b){ return Number(b.quantityStarted||0) - pigBatchDeaths(b) - pigBatchSoldHead(b); }
+function pigMortalityRate(b){ const started=Number(b.quantityStarted||0); return started>0 ? (pigBatchDeaths(b)/started*100) : 0; }
+function pigFeedKg(b){ return (b.feedLog||[]).reduce((s,f)=>s+Number(f.amountKg||0),0); }
+function pigFeedCost(b){ return (b.feedLog||[]).reduce((s,f)=>s+Number(f.cost||0),0); }
+function pigHealthCost(b){ return (b.healthLog||[]).reduce((s,h)=>s+Number(h.cost||0),0); }
+function pigOtherCost(b){ return (b.costs||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+function pigBatchCost(b){ return pigFeedCost(b)+pigHealthCost(b)+pigOtherCost(b); }
+function pigRevenue(b){ return (b.salesLog||[]).reduce((s,x)=>s+Number(x.qty||0)*Number(x.unitPrice||0),0); }
+function pigProfit(b){ return pigRevenue(b) - pigBatchCost(b); }
+function pigFCR(b){
+  const sold = pigBatchSoldHead(b);
+  const avgW = Number(b.avgMarketWeightKg||0);
+  if(sold>0 && avgW>0) return pigFeedKg(b) / (sold*avgW);
+  return null;
+}
+function pigBatchStatus(b){
+  const started = Number(b.quantityStarted||0);
+  return (started>0 && pigBatchRemaining(b)<=0) ? 'closed' : 'active';
+}
+function pigCostsTotal(){ return (pigCosts||[]).reduce((s,c)=>s+Number(c.amount||0),0); }
+
+/* ---- Farm-wide pig costs ---- */
+function renderPigCostsList(){
+  const el = document.getElementById('pigCostsList');
+  if(!pigCosts.length){ el.innerHTML = `<div class="empty">No farm-wide pig costs logged yet.</div>`; return; }
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    ${pigCosts.slice().reverse().map(c=>`
+      <tr>
+        <td>${c.date||''}</td>
+        <td><span class="cost-cat">${escapeHtml(c.category)}</span></td>
+        <td>${escapeHtml(c.description||'')}</td>
+        <td class="num">${fmt(c.amount)}</td>
+        <td>
+          <button class="icon-btn" onclick="openPigCostModal('${c.id}')">Edit</button>
+          <button class="icon-btn" onclick="deletePigCost('${c.id}')">✕</button>
+        </td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+    <div class="summary-row"><div class="item">Total farm-wide pig costs: <b>${fmt(pigCostsTotal())}</b></div></div>
+  `;
+}
+function openPigCostModal(costId){
+  if(!requireOwner()) return;
+  const existing = costId ? pigCosts.find(c=>c.id===costId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing?'Edit':'Add'} pig cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Category</label>
+        <select id="pgc-cat">${PIG_COST_CATS.map(c=>`<option ${existing&&existing.category===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Date</label><input id="pgc-date" type="date" value="${existing?existing.date:todayISO()}"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="pgc-desc" value="${escapeHtml(existing?.description||'')}" placeholder="e.g. Farrowing pen repair"></div>
+    <div class="field"><label>Amount (${CURRENCY})</label><input id="pgc-amount" type="number" step="0.01" value="${existing?existing.amount:''}"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigCost(${existing?`'${costId}'`:'null'})">${existing?'Save changes':'Add cost'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigCost(costId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('pgc-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const entry = {
+    id: costId||uid(), category: document.getElementById('pgc-cat').value,
+    date: document.getElementById('pgc-date').value, description: document.getElementById('pgc-desc').value.trim(), amount
+  };
+  if(costId){ const idx=pigCosts.findIndex(c=>c.id===costId); if(idx>-1) pigCosts[idx]=entry; }
+  else pigCosts.push(entry);
+  await storeSet('pigCosts', pigCosts);
+  closeModal(); renderAll(); showToast(costId?'Cost updated':'Cost added');
+}
+async function deletePigCost(id){
+  if(!requireOwner()) return;
+  pigCosts = pigCosts.filter(c=>c.id!==id);
+  await storeSet('pigCosts', pigCosts);
+  renderAll();
+}
+
+/* ---- Batch list ---- */
+function renderPig(){
+  const activeBatches = pigBatches.filter(b=>pigBatchStatus(b)==='active');
+  const totalCost = pigBatches.reduce((s,b)=>s+pigBatchCost(b),0) + pigCostsTotal();
+  const totalRevenue = pigBatches.reduce((s,b)=>s+pigRevenue(b),0);
+  const totalProfit = totalRevenue - totalCost;
+  document.getElementById('pigCards').innerHTML = `
+    <div class="card pig"><div class="label">Active batches</div><div class="value">${activeBatches.length}</div></div>
+    <div class="card growth"><div class="label">Total pig cost</div><div class="value">${fmt(totalCost)}</div></div>
+    <div class="card gold"><div class="label">Pig profit / loss</div><div class="value" style="color:${totalProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(totalProfit)}</div></div>
+    <div class="card water"><div class="label">Farm-wide pig costs</div><div class="value">${fmt(pigCostsTotal())}</div></div>
+  `;
+  renderPigCostsList();
+  renderPigBatches();
+}
+function renderPigBatches(){
+  const el = document.getElementById('pigBatchList');
+  if(!pigBatches.length){ el.innerHTML = `<div class="empty">No batches yet. Click <b>+ New batch</b> to log a litter farrowed on the farm, or a purchased batch of weaners.</div>`; return; }
+  el.innerHTML = pigBatches.slice().reverse().map(b=>{
+    const cost = pigBatchCost(b), revenue = pigRevenue(b), profit = revenue-cost;
+    const status = pigBatchStatus(b);
+    const remaining = pigBatchRemaining(b);
+    const mortRate = pigMortalityRate(b);
+    const fcr = pigFCR(b);
+    return `
+    <div class="batch">
+      <div class="batch-head" onclick="togglePigBatch('${b.id}')">
+        <div>
+          <div class="batch-title">${escapeHtml(b.breed)} <span class="badge ${status==='active'?'active':'harvested'}">${status}</span></div>
+          <div class="batch-meta">${b.quantityStarted||0} started · ${remaining} remaining · started ${b.startDate||'—'} · ${mortRate.toFixed(1)}% mortality</div>
+        </div>
+        <div class="batch-stats">
+          <div class="p">${fmt(cost)} cost</div>
+          <div class="p ${profit>=0?'pos':'neg'}">${fmt(profit)} profit</div>
+        </div>
+      </div>
+      <div class="batch-body ${b.openInUI?'open':''}" id="pig-body-${b.id}">
+        <div class="summary-row" style="margin-top:14px;">
+          ${b.farrowingDate ? `<div class="item">Farrowed: <b>${b.farrowingDate}</b></div>` : ''}
+          ${b.litterBornAlive ? `<div class="item">Litter size: <b>${b.litterBornAlive} born alive${b.litterStillborn?(', '+b.litterStillborn+' stillborn'):''}</b></div>` : ''}
+          ${b.weaningDate ? `<div class="item">Weaned: <b>${b.weaningDate}</b>${b.avgWeaningWeightKg?(' at '+b.avgWeaningWeightKg+' kg avg'):''}</div>` : ''}
+          <div class="item">Feed used: <b>${pigFeedKg(b).toFixed(1)} kg</b></div>
+          ${fcr!==null ? `<div class="item">Est. FCR: <b>${fcr.toFixed(2)}</b></div>` : ''}
+        </div>
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Feed log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPigFeedModal('${b.id}')">+ Add feed entry</button></div>
+        ${renderLogTable(b.feedLog, [
+          {key:'date',label:'Date'},{key:'feedType',label:'Feed type'},
+          {key:'amountKg',label:'Amount (kg)',numeric:true},{key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePigFeed')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Mortality log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPigMortalityModal('${b.id}')">+ Add record</button></div>
+        ${renderLogTable(b.mortalityLog, [
+          {key:'date',label:'Date'},{key:'deaths',label:'Deaths',numeric:true},{key:'cause',label:'Cause'}
+        ], b.id, 'deletePigMortality')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Health log</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPigHealthModal('${b.id}')">+ Add record</button></div>
+        ${renderLogTable(b.healthLog, [
+          {key:'date',label:'Date'},{key:'condition',label:'Condition / Treatment'},
+          {key:'vetSupplier',label:'Vet / Supplier'},{key:'cost',label:'Cost',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePigHealth')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Sales</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPigSaleModal('${b.id}')">+ Add sale</button></div>
+        ${renderLogTable(b.salesLog, [
+          {key:'date',label:'Date'},{key:'saleType',label:'Type'},{key:'qty',label:'Qty (head)',numeric:true},
+          {key:'weightKg',label:'Weight (kg)',numeric:true},{key:'unitPrice',label:'Unit price',numeric:true,format:v=>fmt(v)},
+          {key:'buyer',label:'Buyer'},
+          {key:'revenue',label:'Revenue',numeric:true,format:(v,row)=>fmt(Number(row.qty||0)*Number(row.unitPrice||0))},
+          {key:'paid',label:'Status',format:v=>v?'Paid':'Pending'}
+        ], b.id, 'deletePigSale')}
+
+        <div class="section-head" style="margin-top:16px;"><h2 style="font-size:14px;">Other costs</h2><button class="btn secondary small" onclick="event.stopPropagation(); openPigOtherCostModal('${b.id}')">+ Add cost</button></div>
+        ${renderLogTable(b.costs, [
+          {key:'date',label:'Date'},{key:'description',label:'Description'},{key:'amount',label:'Amount',numeric:true,format:v=>fmt(v)}
+        ], b.id, 'deletePigOtherCost')}
+
+        <div style="margin-top:14px; text-align:right;">
+          <button class="icon-btn" onclick="event.stopPropagation(); openPigBatchModal('${b.id}')">Edit batch details</button>
+          <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deletePigBatch('${b.id}')">Delete batch</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function togglePigBatch(id){
+  const b = pigBatches.find(x=>x.id===id);
+  b.openInUI = !b.openInUI;
+  renderPigBatches();
+}
+
+/* ---- Batch create/edit/delete ---- */
+function openPigBatchModal(batchId){
+  if(!requireOwner()) return;
+  const existing = batchId ? pigBatches.find(b=>b.id===batchId) : null;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${existing ? 'Edit batch' : 'New batch'}</h3>
+    <div class="field-row">
+      <div class="field"><label>Breed</label>
+        <select id="pgb-breed">${PIG_BREEDS.map(b=>`<option ${existing&&existing.breed===b?'selected':''}>${b}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Source</label>
+        <select id="pgb-source"><option ${existing&&existing.source==='Farrowed on farm'?'selected':''}>Farrowed on farm</option><option ${existing&&existing.source==='Purchased'?'selected':''}>Purchased</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Quantity started</label><input id="pgb-qty" type="number" value="${existing?existing.quantityStarted:''}" placeholder="e.g. 10"></div>
+      <div class="field"><label>Start date</label><input id="pgb-date" type="date" value="${existing?existing.startDate:todayISO()}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Farrowing date — if born on farm</label><input id="pgb-farrow" type="date" value="${existing?existing.farrowingDate:''}"></div>
+      <div class="field"><label>Litter size — born alive</label><input id="pgb-litter-alive" type="number" value="${existing?existing.litterBornAlive:''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Litter — stillborn</label><input id="pgb-litter-still" type="number" value="${existing?existing.litterStillborn:''}"></div>
+      <div class="field"><label>Weaning date</label><input id="pgb-wean-date" type="date" value="${existing?existing.weaningDate:''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Avg weaning weight (kg)</label><input id="pgb-wean-weight" type="number" step="0.1" value="${existing?existing.avgWeaningWeightKg:''}"></div>
+      <div class="field"><label>Avg market weight sold (kg) — enables FCR</label><input id="pgb-market-weight" type="number" step="0.1" value="${existing?existing.avgMarketWeightKg:''}"></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="pgb-notes">${escapeHtml(existing?.notes||'')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigBatch(${existing?`'${batchId}'`:'null'})">${existing?'Save changes':'Create batch'}</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigBatch(batchId){
+  if(!requireOwner()) return;
+  const qty = document.getElementById('pgb-qty').value;
+  if(!qty){ showToast('Enter how many pigs started this batch'); return; }
+  const fields = {
+    breed: document.getElementById('pgb-breed').value, source: document.getElementById('pgb-source').value,
+    quantityStarted: qty, startDate: document.getElementById('pgb-date').value,
+    farrowingDate: document.getElementById('pgb-farrow').value,
+    litterBornAlive: document.getElementById('pgb-litter-alive').value,
+    litterStillborn: document.getElementById('pgb-litter-still').value,
+    weaningDate: document.getElementById('pgb-wean-date').value,
+    avgWeaningWeightKg: document.getElementById('pgb-wean-weight').value,
+    avgMarketWeightKg: document.getElementById('pgb-market-weight').value,
+    notes: document.getElementById('pgb-notes').value.trim()
+  };
+  if(batchId){
+    Object.assign(pigBatches.find(b=>b.id===batchId), fields);
+  } else {
+    const b = blankPigBatch();
+    Object.assign(b, fields);
+    pigBatches.push(b);
+  }
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast(batchId?'Batch updated':'Batch created');
+}
+async function deletePigBatch(id){
+  if(!requireOwner()) return;
+  if(!confirm('Delete this batch and all its feed, mortality, health, and sales records? This cannot be undone.')) return;
+  pigBatches = pigBatches.filter(b=>b.id!==id);
+  await storeSet('pigBatches', pigBatches);
+  renderAll();
+  showToast('Batch deleted');
+}
+
+/* ---- Feed log ---- */
+function openPigFeedModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add feed entry</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pgf-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Feed type</label><input id="pgf-type" placeholder="e.g. Creep Feed, Grower Feed"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Amount fed (kg)</label><input id="pgf-amount" type="number" step="0.1"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="pgf-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigFeed('${batchId}')">Add entry</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigFeed(batchId){
+  if(!requireOwner()) return;
+  const amountKg = Number(document.getElementById('pgf-amount').value||0);
+  if(!amountKg){ showToast('Enter the amount fed'); return; }
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.feedLog.push({id:uid(), date:document.getElementById('pgf-date').value, feedType:document.getElementById('pgf-type').value.trim(), amountKg, cost:Number(document.getElementById('pgf-cost').value||0)});
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast('Feed entry added');
+}
+async function deletePigFeed(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.feedLog = b.feedLog.filter(f=>f.id!==entryId);
+  await storeSet('pigBatches', pigBatches);
+  renderAll();
+}
+
+/* ---- Mortality log ---- */
+function openPigMortalityModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add mortality record</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pgm-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Deaths</label><input id="pgm-deaths" type="number"></div>
+    </div>
+    <div class="field"><label>Cause</label><input id="pgm-cause" placeholder="e.g. Crushing, Disease, Unknown"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigMortality('${batchId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigMortality(batchId){
+  if(!requireOwner()) return;
+  const deaths = Number(document.getElementById('pgm-deaths').value||0);
+  if(!deaths){ showToast('Enter how many pigs died'); return; }
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.mortalityLog.push({id:uid(), date:document.getElementById('pgm-date').value, deaths, cause:document.getElementById('pgm-cause').value.trim()});
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast('Mortality recorded');
+}
+async function deletePigMortality(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.mortalityLog = b.mortalityLog.filter(m=>m.id!==entryId);
+  await storeSet('pigBatches', pigBatches);
+  renderAll();
+}
+
+/* ---- Health log ---- */
+function openPigHealthModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add health record</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pgh-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Cost (${CURRENCY})</label><input id="pgh-cost" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Condition / treatment</label><input id="pgh-condition" placeholder="e.g. Iron injection, Deworming, ASF vaccination"></div>
+    <div class="field"><label>Vet / supplier</label><input id="pgh-supplier" placeholder="e.g. Dr. Kamau"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigHealth('${batchId}')">Add record</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigHealth(batchId){
+  if(!requireOwner()) return;
+  const condition = document.getElementById('pgh-condition').value.trim();
+  if(!condition){ showToast('Enter the condition or treatment'); return; }
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.healthLog.push({id:uid(), date:document.getElementById('pgh-date').value, condition, vetSupplier:document.getElementById('pgh-supplier').value.trim(), cost:Number(document.getElementById('pgh-cost').value||0)});
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast('Health record added');
+}
+async function deletePigHealth(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.healthLog = b.healthLog.filter(h=>h.id!==entryId);
+  await storeSet('pigBatches', pigBatches);
+  renderAll();
+}
+
+/* ---- Sales log ---- */
+function openPigSaleModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add sale</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pgs-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Sale type</label>
+        <select id="pgs-type"><option>Live Weight Sale</option><option>Piglet Sale</option><option>Breeding Stock Sale</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Quantity (head)</label><input id="pgs-qty" type="number"></div>
+      <div class="field"><label>Total weight (kg) — optional</label><input id="pgs-weight" type="number" step="0.1"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Unit price (${CURRENCY} per head)</label><input id="pgs-price" type="number" step="0.01"></div>
+      <div class="field"><label>Buyer</label><input id="pgs-buyer" placeholder="e.g. Local butchery"></div>
+    </div>
+    <div class="field"><label><input type="checkbox" id="pgs-paid" style="width:auto; display:inline-block; margin-right:6px;">Already paid</label></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigSale('${batchId}')">Add sale</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigSale(batchId){
+  if(!requireOwner()) return;
+  const qty = Number(document.getElementById('pgs-qty').value||0);
+  if(!qty){ showToast('Enter a quantity'); return; }
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.salesLog.push({
+    id:uid(), date:document.getElementById('pgs-date').value, saleType:document.getElementById('pgs-type').value,
+    qty, weightKg:Number(document.getElementById('pgs-weight').value||0), unitPrice:Number(document.getElementById('pgs-price').value||0),
+    buyer:document.getElementById('pgs-buyer').value.trim(), paid:document.getElementById('pgs-paid').checked
+  });
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast('Sale added');
+}
+async function deletePigSale(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.salesLog = b.salesLog.filter(s=>s.id!==entryId);
+  await storeSet('pigBatches', pigBatches);
+  renderAll();
+}
+
+/* ---- Other batch-specific costs ---- */
+function openPigOtherCostModal(batchId){
+  if(!requireOwner()) return;
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Add other cost</h3>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="pgo-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Amount (${CURRENCY})</label><input id="pgo-amount" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Description</label><input id="pgo-desc" placeholder="e.g. Bedding straw"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="savePigOtherCost('${batchId}')">Add cost</button>
+    </div>
+  `;
+  openModal();
+}
+async function savePigOtherCost(batchId){
+  if(!requireOwner()) return;
+  const amount = Number(document.getElementById('pgo-amount').value||0);
+  if(!amount){ showToast('Enter an amount'); return; }
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.costs.push({id:uid(), date:document.getElementById('pgo-date').value, description:document.getElementById('pgo-desc').value.trim(), amount});
+  await storeSet('pigBatches', pigBatches);
+  closeModal(); renderAll(); showToast('Cost added');
+}
+async function deletePigOtherCost(batchId, entryId){
+  if(!requireOwner()) return;
+  const b = pigBatches.find(x=>x.id===batchId);
+  b.costs = b.costs.filter(c=>c.id!==entryId);
+  await storeSet('pigBatches', pigBatches);
   renderAll();
 }
 
