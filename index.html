@@ -257,6 +257,15 @@
 
   .crop-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px;}
 
+  .chart-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; position:relative;}
+  .stats-two-col{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:center;}
+  .expense-legend-row{display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:8px;}
+  .expense-legend-dot{width:11px; height:11px; border-radius:3px; flex-shrink:0;}
+  .expense-legend-row b{margin-left:auto; font-family:'IBM Plex Mono'; font-weight:500;}
+  .projection-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px;}
+  .projection-card .big{font-family:'Fraunces',serif; font-weight:700; font-size:26px;}
+  @media (max-width:900px){ .stats-two-col{grid-template-columns:1fr;} }
+
   .hero-profit{
     border-radius:14px; padding:22px 26px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;
     flex-wrap:wrap; gap:10px;
@@ -353,6 +362,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -428,6 +438,7 @@
       <button data-tab="dairy"><span class="dot"></span>Dairy</button>
       <button data-tab="pig"><span class="dot"></span>Pig</button>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
+      <button data-tab="stats"><span class="dot"></span>Statistics</button>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
     <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
@@ -645,6 +656,40 @@
       <section>
         <div class="section-head"><h2>Suggested areas to improve next season</h2></div>
         <div id="insightsList"></div>
+      </section>
+    </div>
+
+    <!-- STATISTICS -->
+    <div id="tab-stats" style="display:none;">
+      <div class="topline">
+        <div>
+          <h1>Statistics</h1>
+          <p>A numbers-first view of the whole farm — trends, breakdowns, per-section KPIs, and a simple projection.</p>
+        </div>
+      </div>
+      <div class="cards" id="statsKpiCards"></div>
+
+      <section>
+        <div class="section-head"><h2>Income vs. expenses, by month</h2></div>
+        <div class="chart-card"><canvas id="chartIncomeExpense" height="90"></canvas><div id="chartIncomeExpenseEmpty" class="empty" style="display:none;">Log a few dated costs and sales to see this trend.</div></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Where the costs are going</h2></div>
+        <div class="stats-two-col">
+          <div class="chart-card"><canvas id="chartExpenseBreakdown"></canvas><div id="chartExpenseBreakdownEmpty" class="empty" style="display:none;">No costs logged yet.</div></div>
+          <div id="expenseBreakdownLegend"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>By section</h2></div>
+        <div id="statsSectionGrid" class="crop-grid"></div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Simple projection</h2></div>
+        <div id="statsProjection"></div>
       </section>
     </div>
 
@@ -1170,8 +1215,10 @@ function goTo(tab){
   document.getElementById('tab-dairy').style.display = tab==='dairy' ? 'block':'none';
   document.getElementById('tab-pig').style.display = tab==='pig' ? 'block':'none';
   document.getElementById('tab-reports').style.display = tab==='reports' ? 'block':'none';
+  document.getElementById('tab-stats').style.display = tab==='stats' ? 'block':'none';
   document.getElementById('tab-guides').style.display = tab==='guides' ? 'block':'none';
   if(tab==='reports') renderReports();
+  if(tab==='stats') renderStats();
   if(tab==='guides') renderGuidesTab();
   if(tab==='poultry') renderPoultry();
   if(tab==='dairy') renderDairy();
@@ -4282,6 +4329,221 @@ async function deletePigOtherCost(batchId, entryId){
   b.costs = b.costs.filter(c=>c.id!==entryId);
   await storeSet('pigBatches', pigBatches);
   renderAll();
+}
+
+/* ==================== STATISTICS ==================== */
+const ENTERPRISE_COLORS = {Crops:'#8C2F39', Water:'#24677D', Poultry:'#A9622A', Dairy:'#3E6E8E', Pig:'#C97A8E'};
+let _chartIncomeExpense = null, _chartExpenseBreakdown = null;
+
+function gatherAllCostEntries(){
+  const out = [];
+  batches.forEach(b => (b.costs||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Crops'})));
+  (waterCosts||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Water'}));
+  poultryBatches.forEach(b => {
+    (b.feedLog||[]).forEach(f => out.push({date:f.date, amount:Number(f.cost||0), enterprise:'Poultry'}));
+    (b.vetLog||[]).forEach(v => out.push({date:v.date, amount:Number(v.cost||0), enterprise:'Poultry'}));
+    (b.costs||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Poultry'}));
+  });
+  (poultryCosts||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Poultry'}));
+  dairyAnimals.forEach(a => {
+    (a.healthLog||[]).forEach(h => out.push({date:h.date, amount:Number(h.cost||0), enterprise:'Dairy'}));
+    (a.breedingLog||[]).forEach(br => out.push({date:br.date, amount:Number(br.cost||0), enterprise:'Dairy'}));
+    (a.costs||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Dairy'}));
+  });
+  (dairyCosts||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Dairy'}));
+  pigBatches.forEach(b => {
+    (b.feedLog||[]).forEach(f => out.push({date:f.date, amount:Number(f.cost||0), enterprise:'Pig'}));
+    (b.healthLog||[]).forEach(h => out.push({date:h.date, amount:Number(h.cost||0), enterprise:'Pig'}));
+    (b.costs||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Pig'}));
+  });
+  (pigCosts||[]).forEach(c => out.push({date:c.date, amount:Number(c.amount||0), enterprise:'Pig'}));
+  return out.filter(e=>e.date && e.amount);
+}
+function gatherAllRevenueEntries(){
+  const out = [];
+  batches.forEach(b => { if(b.stages.harvest.done){ const rev=batchRevenue(b); if(rev) out.push({date:b.stages.harvest.date, amount:rev, enterprise:'Crops'}); } });
+  customers.forEach(c => (c.bills||[]).forEach(bl => out.push({date:bl.date, amount:Number(bl.amount||0), enterprise:'Water'})));
+  poultryBatches.forEach(b => (b.salesLog||[]).forEach(s => out.push({date:s.date, amount:Number(s.qty||0)*Number(s.unitPrice||0), enterprise:'Poultry'})));
+  (dairyMilkSales||[]).forEach(m => out.push({date:m.date, amount:Number(m.litresSold||0)*Number(m.pricePerLitre||0), enterprise:'Dairy'}));
+  dairyAnimals.forEach(a => { if(a.status==='Culled' && a.cullReason==='Sold' && a.cullSalePrice) out.push({date:a.cullDate, amount:Number(a.cullSalePrice||0), enterprise:'Dairy'}); });
+  pigBatches.forEach(b => (b.salesLog||[]).forEach(s => out.push({date:s.date, amount:Number(s.qty||0)*Number(s.unitPrice||0), enterprise:'Pig'})));
+  return out.filter(e=>e.date && e.amount);
+}
+function groupByMonth(entries){
+  const map = {};
+  entries.forEach(e=>{
+    const month = e.date.slice(0,7);
+    map[month] = (map[month]||0) + e.amount;
+  });
+  return map;
+}
+
+function renderStats(){
+  const costEntries = gatherAllCostEntries();
+  const revenueEntries = gatherAllRevenueEntries();
+  const totalCost = costEntries.reduce((s,e)=>s+e.amount,0);
+  const totalRevenue = revenueEntries.reduce((s,e)=>s+e.amount,0);
+  const netProfit = totalRevenue - totalCost;
+  const margin = totalRevenue>0 ? (netProfit/totalRevenue*100) : null;
+
+  document.getElementById('statsKpiCards').innerHTML = `
+    <div class="card onion"><div class="label">Total farm revenue</div><div class="value">${fmt(totalRevenue)}</div></div>
+    <div class="card growth"><div class="label">Total farm cost</div><div class="value">${fmt(totalCost)}</div></div>
+    <div class="card gold"><div class="label">Net profit</div><div class="value" style="color:${netProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(netProfit)}</div></div>
+    <div class="card water"><div class="label">Profit margin</div><div class="value">${margin!==null ? margin.toFixed(1)+'%' : '—'}</div></div>
+  `;
+
+  renderIncomeExpenseChart(costEntries, revenueEntries);
+  renderExpenseBreakdownChart(costEntries);
+  renderStatsSections();
+  renderProjection(costEntries, revenueEntries);
+}
+
+function renderIncomeExpenseChart(costEntries, revenueEntries){
+  const costByMonth = groupByMonth(costEntries);
+  const revByMonth = groupByMonth(revenueEntries);
+  const months = Array.from(new Set([...Object.keys(costByMonth), ...Object.keys(revByMonth)])).sort().slice(-12);
+  const labels = months.map(m=>{ const [y,mo]=m.split('-'); return new Date(y,mo-1,1).toLocaleDateString('en-GB',{month:'short', year:'2-digit'}); });
+
+  if(!months.length){
+    document.getElementById('chartIncomeExpense').style.display = 'none';
+    document.getElementById('chartIncomeExpenseEmpty').style.display = 'block';
+    if(_chartIncomeExpense){ _chartIncomeExpense.destroy(); _chartIncomeExpense = null; }
+    return;
+  }
+  document.getElementById('chartIncomeExpense').style.display = '';
+  document.getElementById('chartIncomeExpenseEmpty').style.display = 'none';
+  const ctx = document.getElementById('chartIncomeExpense');
+  if(!ctx) return;
+  if(_chartIncomeExpense) _chartIncomeExpense.destroy();
+  _chartIncomeExpense = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Income', data: months.map(m=>revByMonth[m]||0), backgroundColor:'#4F6B3A'},
+        {label:'Expenses', data: months.map(m=>costByMonth[m]||0), backgroundColor:'#8C2F39'}
+      ]
+    },
+    options: { responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}} }
+  });
+}
+function renderExpenseBreakdownChart(costEntries){
+  const byEnterprise = {};
+  costEntries.forEach(e=>{ byEnterprise[e.enterprise] = (byEnterprise[e.enterprise]||0) + e.amount; });
+  const keys = Object.keys(byEnterprise).filter(k=>byEnterprise[k]>0);
+  const legendEl = document.getElementById('expenseBreakdownLegend');
+  if(!keys.length){
+    document.getElementById('chartExpenseBreakdown').style.display = 'none';
+    document.getElementById('chartExpenseBreakdownEmpty').style.display = 'block';
+    if(_chartExpenseBreakdown){ _chartExpenseBreakdown.destroy(); _chartExpenseBreakdown = null; }
+    legendEl.innerHTML = '';
+    return;
+  }
+  document.getElementById('chartExpenseBreakdown').style.display = '';
+  document.getElementById('chartExpenseBreakdownEmpty').style.display = 'none';
+  const total = keys.reduce((s,k)=>s+byEnterprise[k],0);
+  legendEl.innerHTML = keys.sort((a,b)=>byEnterprise[b]-byEnterprise[a]).map(k=>`
+    <div class="expense-legend-row">
+      <span class="expense-legend-dot" style="background:${ENTERPRISE_COLORS[k]};"></span>
+      <span>${k}</span>
+      <b>${fmt(byEnterprise[k])} (${(byEnterprise[k]/total*100).toFixed(0)}%)</b>
+    </div>
+  `).join('');
+  const ctx = document.getElementById('chartExpenseBreakdown');
+  if(!ctx) return;
+  if(_chartExpenseBreakdown) _chartExpenseBreakdown.destroy();
+  _chartExpenseBreakdown = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels:keys, datasets:[{ data:keys.map(k=>byEnterprise[k]), backgroundColor:keys.map(k=>ENTERPRISE_COLORS[k]) }] },
+    options: { responsive:true, plugins:{legend:{display:false}} }
+  });
+}
+
+function renderStatsSections(){
+  const cropActive = batches.filter(b=>batchStatus(b)==='active').length;
+  const cropCost = batches.reduce((s,b)=>s+batchCost(b),0);
+  const cropRev = batches.reduce((s,b)=>s+batchRevenue(b),0);
+  const cropMargin = cropRev>0 ? ((cropRev-cropCost)/cropRev*100) : null;
+
+  const waterTotals = customers.reduce((acc,c)=>{ const t=customerTotals(c); acc.billed+=t.billed; acc.paid+=t.paid; return acc; },{billed:0,paid:0});
+  const collectionRate = waterTotals.billed>0 ? (waterTotals.paid/waterTotals.billed*100) : null;
+
+  const poultryStarted = poultryBatches.reduce((s,b)=>s+Number(b.quantityStarted||0),0);
+  const poultryDeaths = poultryBatches.reduce((s,b)=>s+poultryBatchDeaths(b),0);
+  const poultryMortality = poultryStarted>0 ? (poultryDeaths/poultryStarted*100) : null;
+  const poultryFcrs = poultryBatches.map(b=>poultryFCR(b)).filter(f=>f!==null);
+  const poultryAvgFcr = poultryFcrs.length ? (poultryFcrs.reduce((s,f)=>s+f,0)/poultryFcrs.length) : null;
+
+  const herdSize = dairyAnimals.filter(a=>a.status!=='Culled').length;
+  const lactating = dairyAnimals.filter(a=>a.status==='Lactating');
+  const avgDailyYield = lactating.length ? (lactating.reduce((s,a)=>s+dairyAvgDailyYield(a),0)/lactating.length) : null;
+  const litresSold = milkSalesLitres();
+  const costPerLitre = litresSold>0 ? (dairyHerdCostTotal()/litresSold) : null;
+
+  const pigStarted = pigBatches.reduce((s,b)=>s+Number(b.quantityStarted||0),0);
+  const pigDeaths = pigBatches.reduce((s,b)=>s+pigBatchDeaths(b),0);
+  const pigMortality = pigStarted>0 ? (pigDeaths/pigStarted*100) : null;
+  const pigFcrs = pigBatches.map(b=>pigFCR(b)).filter(f=>f!==null);
+  const pigAvgFcr = pigFcrs.length ? (pigFcrs.reduce((s,f)=>s+f,0)/pigFcrs.length) : null;
+
+  const pct = v => v===null ? '—' : v.toFixed(1)+'%';
+  const num = v => v===null ? '—' : v.toFixed(2);
+
+  document.getElementById('statsSectionGrid').innerHTML = `
+    <div class="crop-card" style="border-left:3px solid var(--onion);">
+      <div class="crop-name">Crops</div>
+      <div class="crop-count">${cropActive} active batches</div>
+      <div class="row"><span>Cost</span><b>${fmt(cropCost)}</b></div>
+      <div class="row"><span>Revenue</span><b>${fmt(cropRev)}</b></div>
+      <div class="row"><span>Margin</span><b>${pct(cropMargin)}</b></div>
+    </div>
+    <div class="crop-card" style="border-left:3px solid var(--water);">
+      <div class="crop-name">Water</div>
+      <div class="crop-count">${customers.length} customers</div>
+      <div class="row"><span>Billed</span><b>${fmt(waterTotals.billed)}</b></div>
+      <div class="row"><span>Collected</span><b>${fmt(waterTotals.paid)}</b></div>
+      <div class="row"><span>Collection rate</span><b>${pct(collectionRate)}</b></div>
+    </div>
+    <div class="crop-card" style="border-left:3px solid var(--poultry);">
+      <div class="crop-name">Poultry</div>
+      <div class="crop-count">${poultryStarted} birds started</div>
+      <div class="row"><span>Mortality</span><b>${pct(poultryMortality)}</b></div>
+      <div class="row"><span>Avg FCR</span><b>${num(poultryAvgFcr)}</b></div>
+    </div>
+    <div class="crop-card" style="border-left:3px solid var(--dairy);">
+      <div class="crop-name">Dairy</div>
+      <div class="crop-count">${herdSize} in herd</div>
+      <div class="row"><span>Avg daily yield</span><b>${avgDailyYield!==null?avgDailyYield.toFixed(1)+' L':'—'}</b></div>
+      <div class="row"><span>Cost per litre</span><b>${costPerLitre!==null?fmt(costPerLitre):'—'}</b></div>
+    </div>
+    <div class="crop-card" style="border-left:3px solid var(--pig);">
+      <div class="crop-name">Pig</div>
+      <div class="crop-count">${pigStarted} pigs started</div>
+      <div class="row"><span>Mortality</span><b>${pct(pigMortality)}</b></div>
+      <div class="row"><span>Avg FCR</span><b>${num(pigAvgFcr)}</b></div>
+    </div>
+  `;
+}
+
+function renderProjection(costEntries, revenueEntries){
+  const costByMonth = groupByMonth(costEntries);
+  const revByMonth = groupByMonth(revenueEntries);
+  const months = Array.from(new Set([...Object.keys(costByMonth), ...Object.keys(revByMonth)])).sort();
+  const el = document.getElementById('statsProjection');
+  if(months.length < 1){
+    el.innerHTML = `<div class="empty">Not enough dated records yet to project anything — keep logging costs and sales and this will fill in.</div>`;
+    return;
+  }
+  const monthlyProfits = months.map(m => (revByMonth[m]||0) - (costByMonth[m]||0));
+  const avgProfit = monthlyProfits.reduce((s,p)=>s+p,0) / monthlyProfits.length;
+  el.innerHTML = `
+    <div class="projection-card">
+      <div style="font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Based on ${months.length} month${months.length!==1?'s':''} of recorded activity</div>
+      <div class="big" style="color:${avgProfit>=0?'var(--growth)':'var(--danger)'}">${fmt(avgProfit)} <span style="font-size:14px; font-weight:500; color:var(--ink-soft);">projected next month</span></div>
+      <div style="font-size:12.5px; color:var(--ink-soft); margin-top:8px;">This is a simple average of your recorded monthly profit — not a guarantee. It gets more accurate the more months you log.</div>
+    </div>
+  `;
 }
 
 /* ---------------- Modal plumbing ---------------- */
