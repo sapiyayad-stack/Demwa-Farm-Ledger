@@ -82,6 +82,10 @@
   .nav button:hover{background:#332920;}
   .nav button.active{background:var(--onion); color:#fff;}
   .nav .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;flex-shrink:0;}
+  .nav-section-label{
+    font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#8A7C64;
+    padding:14px 12px 6px; font-weight:600;
+  }
   .sidebar-foot{margin-top:auto; font-size:11px; color:#8A7C64; padding-top:16px; border-top:1px solid #3A2F24;}
 
   /* Main */
@@ -432,13 +436,16 @@
     </div>
     <div class="nav" id="nav">
       <button data-tab="dashboard" class="active"><span class="dot"></span>Dashboard</button>
+      <div class="nav-section-label">Farm modules</div>
       <button data-tab="batches"><span class="dot"></span>Crop Batches</button>
       <button data-tab="water"><span class="dot"></span>Water Records</button>
       <button data-tab="poultry"><span class="dot"></span>Poultry</button>
       <button data-tab="dairy"><span class="dot"></span>Dairy</button>
       <button data-tab="pig"><span class="dot"></span>Pig</button>
+      <div class="nav-section-label">Insights</div>
       <button data-tab="reports"><span class="dot"></span>Profit &amp; Loss</button>
-      <button data-tab="stats"><span class="dot"></span>Statistics</button>
+      <button data-tab="stats"><span class="dot"></span>Farm Pulse</button>
+      <div class="nav-section-label">Resources</div>
       <button data-tab="guides"><span class="dot"></span>Planting Guides</button>
     </div>
     <button class="icon-btn" id="btnInvite" style="color:var(--gold); border:1px solid #4a3a29; border-radius:8px; padding:8px 10px; margin-top:10px; text-align:left;" onclick="openInviteModal()">+ Invite teammate</button>
@@ -663,7 +670,7 @@
     <div id="tab-stats" style="display:none;">
       <div class="topline">
         <div>
-          <h1>Statistics</h1>
+          <h1>Farm Pulse</h1>
           <p>A numbers-first view of the whole farm — trends, breakdowns, per-section KPIs, and a simple projection.</p>
         </div>
       </div>
